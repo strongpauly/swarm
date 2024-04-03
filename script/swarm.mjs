@@ -84,7 +84,7 @@ let SWARMS = {};
 // TODO: Remove debug accessor
 window.SWARMS = SWARMS;
 
-export default class Swarm{
+export default class Swarm {
     constructor( token, number ){
         this.t = 0;
         this.token  = token;
@@ -162,7 +162,7 @@ export default class Swarm{
             // Sprites initial position, a random position within this tokens area
             s.x = token.x + Math.random()*token.w;
             s.y = token.y + Math.random()*token.h;
-            // Hiden initially?
+            // Hidden initially?
             s.alpha = (hidden)?0:1;
 
             // A callback to get correct aspect ratio, and to start the video
@@ -506,11 +506,8 @@ Hooks.on('sightRefresh', (canvasVisibility) => {
   if(canvasVisibility.tokenVision) {
     const swarmedTokens = getSwarmingTokens();
     for(let t of swarmedTokens) {
-      if(t.isVisible && !SWARMS[t.id]) {
-        createSwarmOnToken(t);
-      } else if(!t.isVisible && SWARMS[t.id]) {
-        deleteSwarmOnToken(t);
-      }
+      const swarm = SWARMS[t.id];
+      swarm.layer.alpha = t.isVisible ? 1 : 0;
     }
   }
 })
