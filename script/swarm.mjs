@@ -105,6 +105,7 @@ export default class Swarm {
         
         this.layer.elevation = (token.document.getFlag(MOD_NAME, OVER_FLAG)?10000:0);
         this.layer.sort = 120; // Above tiles at 100
+        this.layer.alpha = token.isVisible ? 1 : 0;
         canvas.primary.addChild(this.layer);
                 
         this.created = false;
