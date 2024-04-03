@@ -66,7 +66,6 @@ function getHealthEstimate(token){
     case 'pf1':
     case 'pf2e':
     case 'dnd5e':
-      return token.actor.data.data.attributes.hp.value / token.actor.data.data.attributes.hp.max;
     case 'D35E':
       return token.actor.system.attributes.hp.value / token.actor.system.attributes.hp.max;
     default:
@@ -236,7 +235,7 @@ export default class Swarm{
         }
 
         let currentHPPercent = this.calculateHPPercent();
-                if (currentHPPercent !== this.currentHPPercent) {
+        if (currentHPPercent !== this.currentHPPercent) {
             this.currentHPPercent = currentHPPercent;
             this.number = this.determineVisibleSprites(currentHPPercent, this.maxSprites);
             // Adjust visibility based on the number of "surviving" sprites
@@ -462,8 +461,6 @@ Hooks.on('updateToken', (token, change, options, user_id)=>{
         hideSwarmOnToken(token, change.hidden);
     }
     
-
-    
 });
 
 
@@ -495,17 +492,28 @@ Hooks.on('createToken', (token, options, user_id)=>{
     createSwarmOnToken(token.object);
   }
 });
+
+const getSwarmingTokens = () => canvas.tokens.placeables.filter((t)=>!!t.document.getFlag(MOD_NAME,SWARM_FLAG)) 
  
 Hooks.on("canvasReady", ()=> {
     // Scene loaded.
-    let swarm = canvas.tokens.placeables.filter( (t)=>{return t.document.getFlag(MOD_NAME,SWARM_FLAG);} ) 
-    //console.error("canvasReady",swarm);
-    for (let s of swarm){
+    for (let s of getSwarmingTokens()){
         createSwarmOnToken(s);
     }
 });
 
- 
+Hooks.on('sightRefresh', (canvasVisibility) => {
+  if(canvasVisibility.tokenVision) {
+    const swarmedTokens = getSwarmingTokens();
+    for(let t of swarmedTokens) {
+      if(t.isVisible && !SWARMS[t.id]) {
+        createSwarmOnToken(t);
+      } else if(!t.isVisible && SWARMS[t.id]) {
+        deleteSwarmOnToken(t);
+      }
+    }
+  }
+})
  
  // Settings:
  Hooks.once("init", () => {
