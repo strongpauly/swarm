@@ -214,7 +214,6 @@ export default class Swarm{
     anim(t){
         if (!this.created){
           this.createSprites(this.maxSprites, this.token, this.layer);  // Use maxSprites instead of number
-          this.created=true;
         }
 
         t = Math.min(t,2.0);// Cap frame skip to two frames
@@ -235,12 +234,13 @@ export default class Swarm{
             this.sprites.forEach((s,i)=>{s.alpha = (i>this.visible)?0:1});
         }
 
-        let currentHPPercent = this.calculateHPPercent();
-                if (currentHPPercent !== this.currentHPPercent) {
+        const currentHPPercent = this.calculateHPPercent();
+        if (currentHPPercent !== this.currentHPPercent || !this.created) {
             this.currentHPPercent = currentHPPercent;
             this.number = this.determineVisibleSprites(currentHPPercent, this.maxSprites);
             // Adjust visibility based on the number of "surviving" sprites
-            this.sprites.forEach((s, i) => {
+            // Start from last sprite as formations would move to the front.
+            this.sprites.toReversed().forEach((s, i) => {
                 s.alpha = (i < this.number) ? 1 : 0;
             });
         }
@@ -249,6 +249,7 @@ export default class Swarm{
         this.set_destinations(ms);
         // Calling the generic move method
         this.move(ms);
+        this.created = true;
         // Keep rotation
         // if (!this.randomRotation){
         //     this.rotation(this.token.document.rotation);
