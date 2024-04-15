@@ -1,43 +1,41 @@
 {
-  "id": "swarm",
-  "title": "Swarms",
-  "description": "Animate swarms.",
-  "version": "10.0.3",
-  "authors": [
-    {
-      "name": "o_Ove",
-      "discord": "Ove#4315",
-      "flags": {}
-    }
-  ],
-  "esmodules": [
-    "script/swarm.mjs"
-  ],
-  "url": "https://github.com/strongpauly/swarm",
-  "download": "https://github.com/strongpauly/swarm/archive/development.zip",
-  "manifest": "https://raw.githubusercontent.com/strongpauly/swarm/development/module.json",
-  "languages": [
-    {
-      "lang": "en",
-      "name": "English",
-      "path": "lang/en.json",
-      "flags": {}
-    }
-  ],
-  "socket": true,
-  "relationships": {
-    "requires": [
-      {
-        "id": "socketlib",
-        "type": "module",
-        "compatibility": {}
-      }
-    ]
-  },
-  "license": "LICENSE",
-  "readme": "README.md",
-  "compatibility": {
-    "minimum": "10",
-    "verified": "10"
-  }
+	"id": "swarm",
+	"title": "Swarms",
+	"description": "Animate swarms.",
+	"version": "10.0.3",
+	"authors": [
+		{
+			"name": "o_Ove",
+			"discord": "Ove#4315",
+			"flags": {}
+		}
+	],
+	"esmodules": ["script/swarm.mjs"],
+	"url": "https://github.com/strongpauly/swarm",
+	"download": "https://github.com/strongpauly/swarm/archive/development.zip",
+	"manifest": "https://raw.githubusercontent.com/strongpauly/swarm/development/module.json",
+	"languages": [
+		{
+			"lang": "en",
+			"name": "English",
+			"path": "lang/en.json",
+			"flags": {}
+		}
+	],
+	"socket": true,
+	"relationships": {
+		"requires": [
+			{
+				"id": "socketlib",
+				"type": "module",
+				"compatibility": {}
+			}
+		]
+	},
+	"license": "LICENSE",
+	"readme": "README.md",
+	"compatibility": {
+		"minimum": "10",
+		"verified": "10"
+	}
 }
