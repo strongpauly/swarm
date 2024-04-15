@@ -292,7 +292,7 @@ export default class Swarm {
         if(updateSprites) {
           const remaining = Math.round(this.maxSprites - this.visible);
           this.sprites.forEach((s,i) => {
-            s.alpha = i >= remaining ? this.spriteAlpha : 0;
+            s.alpha = i >= remaining ? this.spriteAlpha : this.faded && game.user.isGM ? this.spriteAlpha * 0.2: 0;
             this.scale = getScale(s);
             s.scale.x = this.scale.x;
             s.scale.y = this.scale.y;
