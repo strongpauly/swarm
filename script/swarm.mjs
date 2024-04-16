@@ -126,7 +126,7 @@ export default class Swarm {
 		});
 		token.alpha = 0;
 
-		this.layer.elevation = document.getFlag(MOD_NAME, OVER_FLAG) ? 10000 : 0;
+		this.layer.elevation = document.getFlag(MOD_NAME, OVER_FLAG) ? 10000 : document.elevation || 0;
 		this.layer.sort = 120; // Above tiles at 100
 		this.layer.alpha = token.isVisible ? this.spriteAlpha : 0;
 		canvas.primary.addChild(this.layer);
@@ -159,6 +159,7 @@ export default class Swarm {
 		}
 		this.tick.add(this.anim.bind(this));
 		this.tick.start();
+		this.token.refresh();
 		Hooks.call("createSwarm", this);
 	}
 
