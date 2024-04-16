@@ -502,14 +502,6 @@ export default class Swarm {
 	}
 }
 
-//Only in V10+
-Hooks.on("canvasTearDown", (a, b) => {
-	for (let key of Object.keys(SWARMS)) {
-		SWARMS[key].destroy();
-		delete SWARMS[key];
-	}
-});
-
 function deleteSwarmOnToken(token) {
 	const swarm = SWARMS[token.id];
 	if (swarm) {
@@ -635,9 +627,20 @@ Hooks.on("ready", async () => {
 			`Migration to Swarms version 11 complete. Updated ${actors.length} actor(s) and ${tokenCount} token(s).`
 		);
 	}
+});
+
+Hooks.on("canvasReady", () => {
 	// Scene loaded.
 	for (let s of getSwarmingTokens()) {
 		createSwarmOnToken(s);
+	}
+});
+
+//Only in V10+
+Hooks.on("canvasTearDown", (a, b) => {
+	for (let key of Object.keys(SWARMS)) {
+		SWARMS[key].destroy();
+		delete SWARMS[key];
 	}
 });
 
