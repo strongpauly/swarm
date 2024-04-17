@@ -85,6 +85,9 @@ function getHealthEstimate(token) {
 	}
 }
 
+/**
+ * @type Record<string, Swarm>
+ */
 const SWARMS = {};
 // TODO: Remove debug accessor
 window.SWARMS = SWARMS;
@@ -126,7 +129,7 @@ export default class Swarm {
 		});
 		token.alpha = 0;
 
-		this.layer.elevation = document.getFlag(MOD_NAME, OVER_FLAG) ? 10000 : document.elevation || 0;
+		this.setElevation(document.elevation);
 		this.layer.sort = 120; // Above tiles at 100
 		this.layer.alpha = token.isVisible ? this.spriteAlpha : 0;
 		canvas.primary.addChild(this.layer);
@@ -320,6 +323,9 @@ export default class Swarm {
 		// }
 	}
 
+	/**
+	 * @param {boolean} hidden
+	 */
 	hide(hidden) {
 		this.faded = hidden;
 		// Clear step to be recalcuated on next tick
@@ -329,6 +335,13 @@ export default class Swarm {
 		} else {
 			this.number = this.determineVisibleSprites(this.currentHPPercent, this.maxSprites);
 		}
+	}
+
+	/**
+	 * @param {number} elevation
+	 */
+	setElevation(elevation) {
+		this.layer.elevation = this.document.getFlag(MOD_NAME, OVER_FLAG) ? 10000 : elevation || 0;
 	}
 
 	destroy() {
@@ -517,12 +530,6 @@ function createSwarmOnToken(token, document) {
 	SWARMS[token.id] = new Swarm(token, document);
 }
 
-function hideSwarmOnToken(token, hide) {
-	if (token.id in SWARMS) {
-		SWARMS[token.id].hide(hide);
-	}
-}
-
 /**
  * @param {*} changes
  * @returns If any swarm related flag was in this update
@@ -553,9 +560,14 @@ Hooks.on("updateToken", (document, changes) => {
 	if (document.flags?.[MOD_NAME]?.[SWARM_FLAG]) {
 		if (swarmNeedsRefresh(changes) && document.object) {
 			createSwarmOnToken(document.object);
-		}
-		if (changes.hidden != undefined) {
-			hideSwarmOnToken(document, changes.hidden);
+		} else {
+			const swarm = SWARMS[document.id];
+			if (changes.hidden != undefined) {
+				swarm.hide(changes.hidden);
+			}
+			if (changes.elevation !== undefined) {
+				swarm.setElevation(changes.elevation);
+			}
 		}
 	}
 });
