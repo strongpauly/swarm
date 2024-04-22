@@ -104,7 +104,7 @@ export default class Swarm {
 		this.sprites = [];
 		this.dest = [];
 		this.speeds = [];
-		this.ofsets = [];
+		this.offsets = [];
 		this.waiting = [];
 		this.layer = new PIXI.Container();
 
@@ -138,25 +138,25 @@ export default class Swarm {
 
 		this.tick = new PIXI.Ticker();
 		const anim = document.getFlag(MOD_NAME, ANIM_TYPE_FLAG);
-		this.set_destinations = this.circular;
+		this.setDestinations = this.circular;
 		switch (anim) {
 			case ANIM_TYPE_CIRCULAR:
-				this.set_destinations = this.circular;
+				this.setDestinations = this.circular;
 				break;
 			case ANIM_TYPE_RAND_SQUARE:
-				this.set_destinations = this.randSquare;
+				this.setDestinations = this.randSquare;
 				break;
 			case ANIM_TYPE_SPIRAL:
-				this.set_destinations = this.spiral;
+				this.setDestinations = this.spiral;
 				break;
 			case ANIM_TYPE_SKITTER:
-				this.set_destinations = this.skitter;
+				this.setDestinations = this.skitter;
 				break;
 			case ANIM_TYPE_STOPNMOVE:
-				this.set_destinations = this.stopMoveStop;
+				this.setDestinations = this.stopMoveStop;
 				break;
 			case ANIM_TYPE_FORMATION_SQUARE:
-				this.set_destinations = this.formSquare;
+				this.setDestinations = this.formSquare;
 				// this.randomRotation = false;
 				break;
 		}
@@ -181,7 +181,7 @@ export default class Swarm {
 			// waiting times, only used for stop-move
 			this.waiting.push(0);
 			// Random offset
-			this.ofsets.push(Math.random() * 97);
+			this.offsets.push(Math.random() * 97);
 			// Pick an image from the list at random
 			let img = images[Math.floor(Math.random() * images.length)];
 			let s = PIXI.Sprite.from(img);
@@ -241,6 +241,9 @@ export default class Swarm {
 	 * @param {Number} t Time fraction of the current fps
 	 */
 	anim(t) {
+		if (!this.token.width || !this.token.height) {
+			return;
+		}
 		if (!this.created) {
 			this.createSprites(this.maxSprites); // Use maxSprites instead of number
 		}
@@ -313,7 +316,7 @@ export default class Swarm {
 		}
 
 		// Calling the animation specific method, set_destination
-		this.set_destinations(ms);
+		this.setDestinations(ms);
 		// Calling the generic move method
 		this.move(ms);
 		this.created = true;
@@ -460,7 +463,7 @@ export default class Swarm {
 		let rx = 0.5 * this.token.w;
 		let ry = 0.5 * this.token.h;
 		for (let i = 0; i < this.sprites.length; ++i) {
-			let t = this.speeds[i] * this.t * 0.02 + this.ofsets[i];
+			let t = this.speeds[i] * this.t * 0.02 + this.offsets[i];
 			let x = Math.cos(t);
 			let y = 0.4 * Math.sin(t);
 
@@ -478,15 +481,15 @@ export default class Swarm {
 		let _ry = 1 * 0.5 * this.token.h;
 
 		for (let i = 0; i < this.sprites.length; ++i) {
-			let t = this.t * 0.02 + this.ofsets[i];
+			let t = this.t * 0.02 + this.offsets[i];
 			let rY =
 				1 *
 				(0.5 + 0.5 * (1.0 * Math.sin(t * 0.3) + 0.3 * Math.sin(2 * t + 0.8) + 0.26 * Math.sin(3 * t + 0.8)));
 			let x = Math.cos(t * this.speeds[i]);
 			let y = rY * Math.sin(t * this.speeds[i]);
 
-			let ci = Math.cos(this.ofsets[i]);
-			let si = Math.sin(this.ofsets[i]);
+			let ci = Math.cos(this.offsets[i]);
+			let si = Math.sin(this.offsets[i]);
 			let rx = _rx * (ci * x - si * y);
 			let ry = _ry * (si * x + ci * y);
 
