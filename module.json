@@ -8,12 +8,17 @@
 			"name": "o_Ove",
 			"discord": "Ove#4315",
 			"flags": {}
+		},
+		{
+			"name": "strongpauly",
+			"discord": "strongpauly#0514",
+			"flags": {}
 		}
 	],
 	"esmodules": ["script/swarm.mjs"],
-	"url": "https://github.com/oOve/swarm",
-	"download": "https://github.com/oOve/swarm/archive/11.0.0.zip",
-	"manifest": "https://github.com/oOve/swarm/releases/latest/download/module.json",
+	"url": "https://github.com/strongpauly/swarm",
+	"download": "https://github.com/strongpauly/swarm/archive/development.zip",
+	"manifest": "https://raw.githubusercontent.com/strongpauly/swarm/development/module.json",
 	"languages": [
 		{
 			"lang": "en",
