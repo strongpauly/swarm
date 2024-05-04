@@ -2,7 +2,7 @@
 	"id": "swarm",
 	"title": "Swarms",
 	"description": "Animate swarms.",
-	"version": "10.0.3",
+	"version": "11.0.0",
 	"authors": [
 		{
 			"name": "o_Ove",
@@ -11,9 +11,9 @@
 		}
 	],
 	"esmodules": ["script/swarm.mjs"],
-	"url": "https://github.com/strongpauly/swarm",
-	"download": "https://github.com/strongpauly/swarm/archive/development.zip",
-	"manifest": "https://raw.githubusercontent.com/strongpauly/swarm/development/module.json",
+	"url": "https://github.com/oOve/swarm",
+	"download": "https://github.com/oOve/swarm/archive/11.0.0.zip",
+	"manifest": "https://github.com/oOve/swarm/releases/latest/download/module.json",
 	"languages": [
 		{
 			"lang": "en",
@@ -36,6 +36,6 @@
 	"readme": "README.md",
 	"compatibility": {
 		"minimum": "10",
-		"verified": "10"
+		"verified": "11"
 	}
 }
