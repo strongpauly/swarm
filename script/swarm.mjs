@@ -170,9 +170,9 @@ export default class Swarm {
 		const use_random_image = this.token.actor.prototypeToken.randomImg;
 		const hidden = this.document.hidden;
 
-		const images = [];
+		let images = [];
 		if (use_random_image) {
-			images = await swarm_socket.executeAsGM("wildcards", token.id);
+			images = await swarm_socket.executeAsGM("wildcards", this.token.id);
 		} else {
 			images.push(this.document.texture.src);
 		}
