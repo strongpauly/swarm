@@ -92,6 +92,8 @@ const SWARMS = {};
 // TODO: Remove debug accessor
 window.SWARMS = SWARMS;
 
+class SwarmContainer extends PIXI.Container {}
+
 export default class Swarm {
 	constructor(token, document = token.document) {
 		const number = document.getFlag(MOD_NAME, SWARM_SIZE_FLAG);
@@ -106,7 +108,7 @@ export default class Swarm {
 		this.speeds = [];
 		this.offsets = [];
 		this.waiting = [];
-		this.layer = new PIXI.Container();
+		this.layer = new SwarmContainer();
 
 		// this.randomRotation = true;
 		this.faded = document.hidden;
@@ -132,7 +134,8 @@ export default class Swarm {
 		this.setElevation(document.elevation);
 		this.layer.sort = 120; // Above tiles at 100
 		this.layer.alpha = token.isVisible ? this.spriteAlpha : 0;
-		canvas.primary.addChild(this.layer);
+		const parent = canvas.regions || canvas.primary;
+		parent.addChild(this.layer);
 
 		this.created = false;
 
