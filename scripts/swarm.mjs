@@ -183,6 +183,8 @@ export default class Swarm {
 			images.push(this.document.texture.src);
 		}
 
+		const anim = this.document.getFlag(MOD_NAME, ANIM_TYPE_FLAG);
+
 		for (let i = 0; i < number; ++i) {
 			// waiting times, only used for stop-move
 			this.waiting.push(0);
@@ -217,6 +219,22 @@ export default class Swarm {
 			this.sprites.push(s);
 			let sf = this.document.getFlag(MOD_NAME, SWARM_SPEED_FLAG);
 			if (sf === undefined) sf = 1;
+
+			switch (anim) {
+				case ANIM_TYPE_RAND_SQUARE:
+					sf *= 0.5;
+					break;
+				case ANIM_TYPE_SPIRAL:
+					sf *= 1.2;
+					break;
+				case ANIM_TYPE_SKITTER:
+				case ANIM_TYPE_CIRCULAR:
+				case ANIM_TYPE_STOPNMOVE:
+				case ANIM_TYPE_FORMATION_SQUARE:
+				default:
+					break;
+			}
+
 			// Add 50% of the speed as variability on each sprites speed
 			this.speeds.push(sf * 0.5 + sf * Math.random() * 0.5);
 			// Add this sprite to the correct layer
@@ -742,15 +760,34 @@ function createLabel(text) {
 	return label;
 }
 
-function dropDownConfig(parent, app, flag_name, title, values, default_value = null) {
+function createHint(hint, formGroup) {
+	if (!hint) {
+		return;
+	}
+	const p = document.createElement("p");
+	p.classList.add("notes");
+	p.append(hint);
+	formGroup.append(p);
+}
+
+function dropDownConfig({ parent, app, flag_name, default_value, values, hint }) {
 	let flags = app.token.flags;
 	if (flags === undefined) flags = app.token.data.flags;
 
-	let cur = flags?.[MOD_NAME]?.[flag_name];
+	const formGroup = document.createElement("div");
+	formGroup.classList.add("form-group");
+	parent.append(formGroup);
+
+	formGroup.append(createLabel("Animation"));
+
+	const formFields = document.createElement("div");
+	formFields.classList.add("form-fields");
+	formGroup.append(formFields);
+
+	const cur = flags?.[MOD_NAME]?.[flag_name] ?? default_value;
 	//parent.append(createLabel(title));
 	const input = document.createElement("select");
 	input.name = "flags." + MOD_NAME + "." + flag_name;
-	input.style.width = "50px";
 
 	for (let o of values) {
 		let opt = document.createElement("option");
@@ -760,10 +797,12 @@ function dropDownConfig(parent, app, flag_name, title, values, default_value = n
 	}
 	input.value = cur;
 
-	parent.append(input);
+	formFields.append(input);
+
+	createHint(hint, formGroup);
 }
 
-function textBoxConfig(
+function textBoxConfig({
 	parent,
 	app,
 	flag_name,
@@ -771,12 +810,23 @@ function textBoxConfig(
 	type = "number",
 	placeholder = null,
 	default_value = null,
-	step = null
-) {
+	step = null,
+	hint
+}) {
 	let flags = app.token.flags;
 	if (flags === undefined) flags = app.token.data.flags;
 
-	parent.append(createLabel(title));
+	const formGroup = document.createElement("div");
+	formGroup.classList.add("form-group");
+	formGroup.classList.add("slim");
+	parent.append(formGroup);
+
+	formGroup.append(createLabel(title));
+
+	const formFields = document.createElement("div");
+	formFields.classList.add("form-fields");
+	formGroup.append(formFields);
+
 	const input = document.createElement("input");
 	input.name = "flags." + MOD_NAME + "." + flag_name;
 	input.type = type;
@@ -788,23 +838,26 @@ function textBoxConfig(
 	} else if (default_value != null) {
 		input.value = default_value;
 	}
-	parent.append(input);
+	formFields.append(input);
+	createHint(hint, formGroup);
 }
 
-function createCheckBox(app, fields, data_name, title, hint) {
-	const label = document.createElement("label");
-	label.textContent = title;
+function createCheckBox({ app, parent, data_name, title, hint }) {
+	const formGroup = document.createElement("div");
+	formGroup.classList.add("form-group");
+	parent.append(formGroup);
+
+	formGroup.append(createLabel(title));
+
 	const input = document.createElement("input");
 	input.name = "flags." + MOD_NAME + "." + data_name;
 	input.type = "checkbox";
-	input.title = hint;
 
 	if (app.token.getFlag(MOD_NAME, data_name)) {
 		input.checked = "true";
 	}
-
-	fields.append(label);
-	fields.append(input);
+	formGroup.append(input);
+	createHint(hint, formGroup);
 }
 function imageSelector(app, flag_name, title) {
 	let data_path = "flags." + MOD_NAME + "." + flag_name;
@@ -861,28 +914,60 @@ Hooks.on("renderTokenConfig", (app, html) => {
 	if (!game.user.isGM) return;
 
 	// Create a new form group
-	const formGroup = document.createElement("div");
-	formGroup.classList.add("form-group");
-	formGroup.classList.add("slim");
+	const parent = document.createElement("fieldset");
+	//
 
-	// Create a label for this setting
-	const label = document.createElement("label");
-	label.textContent = "Swarm";
-	formGroup.prepend(label);
+	// Create a legend for this setting
+	const legend = document.createElement("legend");
+	legend.textContent = "Swarm";
+	parent.append(legend);
 
-	// Create a form fields container
-	const formFields = document.createElement("div");
-	formFields.classList.add("form-fields");
-	formGroup.append(formFields);
+	createCheckBox({
+		app,
+		parent,
+		data_name: SWARM_FLAG,
+		title: "Swarm Enabled",
+		hint: "Whether this token is a swarm."
+	});
+	createCheckBox({
+		app,
+		parent,
+		data_name: OVER_FLAG,
+		title: "Over",
+		hint: "Check if the swarm should be placed over players."
+	});
 
-	createCheckBox(app, formFields, SWARM_FLAG, "", "");
-	createCheckBox(app, formFields, OVER_FLAG, "Over", "Check if the swarm should be placed over players.");
-	textBoxConfig(formFields, app, SWARM_SIZE_FLAG, "Count", "number", 20, 20, 1);
-	textBoxConfig(formFields, app, SWARM_SPEED_FLAG, "Speed", "number", 1.0, 1.0, 0.1);
-	dropDownConfig(formFields, app, ANIM_TYPE_FLAG, "anim", ANIM_TYPES, ANIM_TYPE_CIRCULAR);
+	textBoxConfig({
+		parent,
+		app,
+		flag_name: SWARM_SIZE_FLAG,
+		title: "Count",
+		placeholder: 20,
+		default_value: 20,
+		step: 1,
+		hint: "Number of sprites in the swarm."
+	});
+	textBoxConfig({
+		parent,
+		app,
+		flag_name: SWARM_SPEED_FLAG,
+		title: "Speed",
+		placeholder: 1.0,
+		default_value: 1.0,
+		step: 0.1,
+		hint: "Animation speed for the swarm."
+	});
+	dropDownConfig({
+		parent,
+		app,
+		flag_name: ANIM_TYPE_FLAG,
+		values: ANIM_TYPES,
+		default_value: ANIM_TYPE_CIRCULAR,
+		hint: "Animation style for the swarm."
+	});
 
 	// Add the form group to the bottom of the Identity tab
-	html[0].querySelector("div[data-tab='character']").append(formGroup);
+	html[0].querySelector("div[data-tab='character']").append(parent);
 
 	// Add difference swarm image
 	//const swarmImage = imageSelector(app, SWARM_IMAGE_FLAG, "Token for Swarm mobs");
