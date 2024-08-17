@@ -15,7 +15,7 @@
 			"flags": {}
 		}
 	],
-	"esmodules": ["script/swarm.mjs"],
+	"esmodules": ["scripts/swarm.mjs"],
 	"url": "#{URL}#",
 	"manifest": "#{MANIFEST}#",
 	"download": "#{DOWNLOAD}#",
