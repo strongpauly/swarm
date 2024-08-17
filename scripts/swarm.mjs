@@ -563,10 +563,10 @@ Hooks.on("preUpdateToken", (document, changes) => {
 
 Hooks.on("updateToken", (document, changes) => {
 	if (document.flags?.[MOD_NAME]?.[SWARM_FLAG]) {
-		if (swarmNeedsRefresh(changes) && document.object) {
+		const swarm = SWARMS[document.id];
+		if (!swarm || (swarmNeedsRefresh(changes) && document.object)) {
 			createSwarmOnToken(document.object);
 		} else {
-			const swarm = SWARMS[document.id];
 			if (changes.hidden != undefined) {
 				swarm.hide(changes.hidden);
 			}
@@ -574,6 +574,12 @@ Hooks.on("updateToken", (document, changes) => {
 				swarm.setElevation(changes.elevation);
 			}
 		}
+	}
+});
+
+Hooks.on("refreshToken", (token) => {
+	if (token.document.getFlag(MOD_NAME, SWARM_FLAG) === true && !SWARMS[token.id] && token.mesh) {
+		createSwarmOnToken(token);
 	}
 });
 
@@ -613,13 +619,6 @@ Hooks.on("deleteToken", (token, options, user_id) => {
 
 const isSwarmingToken = (t) => !!t.document.getFlag(MOD_NAME, SWARM_FLAG);
 const getSwarmingTokens = () => canvas.tokens.placeables.filter(isSwarmingToken);
-
-// Create token
-Hooks.on("createToken", (token, options, user_id) => {
-	if (token.getFlag(MOD_NAME, SWARM_FLAG) === true) {
-		createSwarmOnToken(token.object);
-	}
-});
 
 Hooks.on("ready", async () => {
 	if (game.settings.get(MOD_NAME, SETTING_MIGRATED_TO) < 11.0) {
