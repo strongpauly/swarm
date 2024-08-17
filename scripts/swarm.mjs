@@ -92,7 +92,19 @@ const SWARMS = {};
 // TODO: Remove debug accessor
 window.SWARMS = SWARMS;
 
-class SwarmContainer extends PIXI.Container {}
+class SwarmContainer extends PIXI.Container {
+	constructor(token, document) {
+		super();
+		this.token = token;
+		this.document = document;
+	}
+
+	get alpha() {
+		return this.token.isVisible ? this.document.alpha : 0;
+	}
+
+	set alpha(_v) {}
+}
 
 export default class Swarm {
 	constructor(token, document = token.document) {
@@ -108,32 +120,23 @@ export default class Swarm {
 		this.speeds = [];
 		this.offsets = [];
 		this.waiting = [];
-		this.layer = new SwarmContainer();
+		this.layer = new SwarmContainer(token, document);
 
 		// this.randomRotation = true;
 		this.faded = document.hidden;
 		this.visible = this.faded ? 0 : this.number;
-		this.spriteAlpha = document.alpha;
 
-		const swarm = this;
-
-		Object.defineProperty(document, "alpha", {
+		Object.defineProperty(token.mesh, "alpha", {
 			get() {
 				return 0;
 			},
-			set(v) {
-				if (!document.hidden) {
-					swarm.spriteAlpha = v;
-				}
-			},
+			set(_v) {},
 			configurable: true,
 			enumerable: true
 		});
-		token.alpha = 0;
 
 		this.setElevation(document.elevation);
 		this.layer.sort = 120; // Above tiles at 100
-		this.layer.alpha = token.isVisible ? this.spriteAlpha : 0;
 		const parent = canvas.regions || canvas.primary;
 		parent.addChild(this.layer);
 
@@ -299,16 +302,12 @@ export default class Swarm {
 				const scale = getScale(this.sprites[0]);
 				updateSprites = this.scale.x !== scale.x || this.scale.y !== scale.y;
 			}
-			if (!updateSprites) {
-				updateSprites = this.sprites[0].spriteAlpha !== this.spriteAlpha;
-			}
 		}
 
 		if (updateSprites) {
 			const remaining = Math.round(this.maxSprites - this.visible);
 			this.sprites.forEach((s, i) => {
-				s.alpha = i >= remaining ? this.spriteAlpha : this.faded && game.user.isGM ? this.spriteAlpha * 0.2 : 0;
-				s.spriteAlpha = this.spriteAlpha;
+				s.alpha = i >= remaining ? 1 : this.faded && game.user.isGM ? 0.2 : 0;
 				this.scale = getScale(s);
 				s.scale.x = this.scale.x;
 				s.scale.y = this.scale.y;
@@ -357,8 +356,8 @@ export default class Swarm {
 		}
 		this.tick.destroy();
 		this.layer.destroy();
-		Object.defineProperty(this.document, "alpha", {
-			value: this.spriteAlpha,
+		Object.defineProperty(this.token.mesh, "alpha", {
+			value: this.document.alpha,
 			configurable: true,
 			enumerable: true,
 			writable: true
@@ -624,7 +623,7 @@ Hooks.on("createToken", (token, options, user_id) => {
 
 Hooks.on("ready", async () => {
 	if (game.settings.get(MOD_NAME, SETTING_MIGRATED_TO) < 11.0) {
-		ui.notifications.notify(`Migrating to Swarms version 11.  Please don't refresh your browser.`);
+		ui.notifications.notify(`Migrating Swarms.  Please don't refresh your browser.`);
 		const actors = game.actors.filter(
 			(a) => a.prototypeToken.getFlag(MOD_NAME, SWARM_FLAG) && a.prototypeToken.alpha === 0
 		);
@@ -643,7 +642,7 @@ Hooks.on("ready", async () => {
 		);
 		await game.settings.set(MOD_NAME, SETTING_MIGRATED_TO, 11.0);
 		ui.notifications.notify(
-			`Migration to Swarms version 11 complete. Updated ${actors.length} actor(s) and ${tokenCount} token(s).`
+			`Swarms Migration complete. Updated ${actors.length} actor(s) and ${tokenCount} token(s).`
 		);
 	}
 });
@@ -663,18 +662,18 @@ Hooks.on("canvasTearDown", (a, b) => {
 	}
 });
 
-Hooks.on("sightRefresh", (canvasVisibility) => {
-	if (canvasVisibility.tokenVision) {
-		const swarmedTokens = getSwarmingTokens();
-		for (let t of swarmedTokens) {
-			const swarm = SWARMS[t.id];
-			if (swarm) {
-				// Swarm might not exist if just been updated
-				swarm.layer.alpha = t.isVisible ? swarm.spriteAlpha : 0;
-			}
-		}
-	}
-});
+// Hooks.on("sightRefresh", (canvasVisibility) => {
+// 	if (canvasVisibility.tokenVision) {
+// 		const swarmedTokens = getSwarmingTokens();
+// 		for (let t of swarmedTokens) {
+// 			const swarm = SWARMS[t.id];
+// 			if (swarm) {
+// 				// Swarm might not exist if just been updated
+// 				// swarm.layer.alpha = t.isVisible ? swarm.document.alpha : 0;
+// 			}
+// 		}
+// 	}
+// });
 
 // Settings:
 Hooks.once("init", () => {
