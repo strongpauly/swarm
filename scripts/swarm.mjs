@@ -99,11 +99,19 @@ class SwarmContainer extends PIXI.Container {
 		this.document = document;
 	}
 
+	get name() {
+		return `Swarm.${this.token.id}`;
+	}
+
 	get alpha() {
 		return this.token.isVisible ? this.document.alpha : 0;
 	}
 
 	set alpha(_v) {}
+
+	get sortLayer() {
+		return this.token.mesh.sortLayer;
+	}
 }
 
 export default class Swarm {
@@ -135,10 +143,10 @@ export default class Swarm {
 			enumerable: true
 		});
 
+		canvas.primary.addChild(this.layer);
+
 		this.setElevation(document.elevation);
-		this.layer.sort = 120; // Above tiles at 100
-		const parent = canvas.regions || canvas.primary;
-		parent.addChild(this.layer);
+		this.setSort(this.token.sort ?? 0);
 
 		this.created = false;
 
@@ -364,7 +372,11 @@ export default class Swarm {
 	 * @param {number} elevation
 	 */
 	setElevation(elevation) {
-		this.layer.elevation = this.document.getFlag(MOD_NAME, OVER_FLAG) ? 10000 : elevation || 0;
+		this.layer.elevation = elevation || 0;
+	}
+
+	setSort(sort) {
+		this.layer.sort = sort;
 	}
 
 	destroy() {
@@ -590,6 +602,9 @@ Hooks.on("updateToken", (document, changes) => {
 			}
 			if (changes.elevation !== undefined) {
 				swarm.setElevation(changes.elevation);
+			}
+			if (changes.sort !== undefined) {
+				swarm.setSort(changes.sort);
 			}
 		}
 	}
@@ -929,14 +944,6 @@ Hooks.on("renderTokenConfig", (app, html) => {
 		title: "Swarm Enabled",
 		hint: "Whether this token is a swarm."
 	});
-	createCheckBox({
-		app,
-		parent,
-		data_name: OVER_FLAG,
-		title: "Over",
-		hint: "Check if the swarm should be placed over players."
-	});
-
 	textBoxConfig({
 		parent,
 		app,
