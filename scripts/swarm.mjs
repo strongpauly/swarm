@@ -32,7 +32,6 @@ const ANIM_TYPES = [
 	ANIM_TYPE_FORMATION_SQUARE
 ];
 
-const OVER_FLAG = "swarmOverPlayers";
 const SETTING_HP_REDUCE = "reduceSwarmWithHP";
 const SETTING_HP_REDUCE_ATTRIBUTE_VALUE = "attributeHpValue";
 const SETTING_HP_REDUCE_ATTRIBUTE_MAX = "attributeHpMax";
@@ -874,6 +873,7 @@ function createCheckBox({ app, parent, data_name, title, hint }) {
 	formGroup.append(input);
 	createHint(hint, formGroup);
 }
+
 function imageSelector(app, flag_name, title) {
 	let data_path = "flags." + MOD_NAME + "." + flag_name;
 
