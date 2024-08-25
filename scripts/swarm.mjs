@@ -332,7 +332,7 @@ export default class Swarm {
 				updateSprites = true;
 			} else {
 				const scale = getScale(this.sprites[0]);
-				updateSprites = this.scale.x !== scale.x || this.scale.y !== scale.y;
+				updateSprites = scale && (this.scale.x !== scale.x || this.scale.y !== scale.y);
 			}
 		}
 
