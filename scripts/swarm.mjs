@@ -201,6 +201,10 @@ export default class Swarm {
 			// Hidden initially?
 			s.alpha = hidden ? 0 : 1;
 
+			// Start off at scale 0 before image is loaded
+			s.scale.x = 0;
+			s.scale.y = 0;
+
 			// A callback to start the video
 			const start = () => {
 				// Check if the texture selected is a video, and potentially start it
@@ -276,9 +280,12 @@ export default class Swarm {
 		// Milliseconds elapsed, as calculated using the "time" fraction and current fps
 		const ms = t * 1000 * (1.0 / this.tick.FPS);
 
-		const getScale = (s) => {
+		const getScale = (sprite) => {
+			if (!sprite.texture.valid) {
+				return;
+			}
 			// Get the largest dimension, and scale around that
-			const smax = Math.max(s.texture.width, s.texture.height);
+			const smax = Math.max(sprite.texture.width, sprite.texture.height);
 			const x = (this.document.texture.scaleX * canvas.grid.size) / smax;
 			const y = (this.document.texture.scaleY * canvas.grid.size) / smax;
 			return { x, y };
@@ -324,13 +331,16 @@ export default class Swarm {
 
 		if (updateSprites) {
 			const remaining = Math.round(this.maxSprites - this.visible);
-			this.sprites.forEach((s, i) => {
-				s.alpha = i >= remaining ? 1 : this.faded && game.user.isGM ? 0.2 : 0;
-				this.scale = getScale(s);
-				s.scale.x = this.scale.x;
-				s.scale.y = this.scale.y;
+			this.sprites.forEach((sprite, i) => {
+				sprite.alpha = i >= remaining ? 1 : this.faded && game.user.isGM ? 0.2 : 0;
+				const newScale = getScale(sprite);
+				if (newScale) {
+					this.scale = newScale;
+					sprite.scale.x = this.scale.x;
+					sprite.scale.y = this.scale.y;
+				}
 				if (this.document.texture.tint) {
-					this.tint = s.tint = this.document.texture.tint;
+					this.tint = sprite.tint = this.document.texture.tint;
 				}
 			});
 		}
