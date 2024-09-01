@@ -127,7 +127,7 @@ export default class Swarm {
 		this.speeds = [];
 		this.offsets = [];
 		this.waiting = [];
-		this.layer = new SwarmContainer(token, document);
+		const swarm = (this.layer = new SwarmContainer(token, document));
 
 		// this.randomRotation = true;
 		this.faded = document.hidden;
@@ -141,6 +141,18 @@ export default class Swarm {
 			configurable: true,
 			enumerable: true
 		});
+
+		if (this.token._TMFXgetSprite && !this.token._old_TMFXgetSprite) {
+			// Override sprite for Token Magic
+			this.token._old_TMFXgetSprite = this.token._TMFXgetSprite;
+			this.token._TMFXgetSprite = function () {
+				return swarm;
+			}.bind(this.token);
+			// Re set filters on new sprite
+			setTimeout(() => {
+				TokenMagic._singleLoadFilters(this.token);
+			}, 0);
+		}
 
 		canvas.primary.addChild(this.layer);
 
@@ -394,13 +406,19 @@ export default class Swarm {
 			s.destroy();
 		}
 		this.tick.destroy();
-		this.layer.destroy();
 		Object.defineProperty(this.token.mesh, "alpha", {
 			value: this.document.alpha,
 			configurable: true,
 			enumerable: true,
 			writable: true
 		});
+		if (this.token._old_TMFXgetSprite) {
+			this.token._TMFXgetSprite = this.token._old_TMFXgetSprite.bind(this.token);
+			delete this.token._old_TMFXgetSprite;
+			// Re set filters on new sprite
+			TokenMagic._singleLoadFilters(this.token);
+		}
+		this.layer.destroy();
 		Hooks.call("destroySwarm", this);
 	}
 
