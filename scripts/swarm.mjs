@@ -149,9 +149,11 @@ export default class Swarm {
 				return swarm;
 			}.bind(this.token);
 			// Re set filters on new sprite
-			setTimeout(() => {
-				TokenMagic?._singleLoadFilters(this.token);
-			}, 0);
+			if (typeof TokenMagic !== "undefined") {
+				setTimeout(() => {
+					TokenMagic._singleLoadFilters(this.token);
+				}, 0);
+			}
 		}
 
 		canvas.primary.addChild(this.layer);
@@ -416,7 +418,9 @@ export default class Swarm {
 			this.token._TMFXgetSprite = this.token._old_TMFXgetSprite.bind(this.token);
 			delete this.token._old_TMFXgetSprite;
 			// Re set filters on new sprite
-			TokenMagic?._singleLoadFilters(this.token);
+			if (typeof TokenMagic !== "undefined") {
+				TokenMagic._singleLoadFilters(this.token);
+			}
 		}
 		this.layer.destroy();
 		Hooks.call("destroySwarm", this);
