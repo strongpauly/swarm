@@ -150,7 +150,7 @@ export default class Swarm {
 			}.bind(this.token);
 			// Re set filters on new sprite
 			setTimeout(() => {
-				TokenMagic._singleLoadFilters(this.token);
+				TokenMagic?._singleLoadFilters(this.token);
 			}, 0);
 		}
 
