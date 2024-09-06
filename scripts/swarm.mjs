@@ -416,7 +416,7 @@ export default class Swarm {
 			this.token._TMFXgetSprite = this.token._old_TMFXgetSprite.bind(this.token);
 			delete this.token._old_TMFXgetSprite;
 			// Re set filters on new sprite
-			TokenMagic._singleLoadFilters(this.token);
+			TokenMagic?._singleLoadFilters(this.token);
 		}
 		this.layer.destroy();
 		Hooks.call("destroySwarm", this);
