@@ -15,7 +15,7 @@
 			"flags": {}
 		}
 	],
-	"esmodules": ["scripts/swarm.mjs"],
+	"esmodules": ["scripts/swarm.mjs", "scripts/ui.mjs"],
 	"url": "#{URL}#",
 	"manifest": "#{MANIFEST}#",
 	"download": "#{DOWNLOAD}#",
@@ -41,6 +41,6 @@
 	"readme": "README.md",
 	"compatibility": {
 		"minimum": "12",
-		"verified": "12"
+		"verified": "13"
 	}
 }

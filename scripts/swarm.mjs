@@ -10,37 +10,29 @@
    ░       ░       ░         ░ ░  
  ░                 ░              
  */
-const MOD_NAME = "swarm";
-const SWARM_FLAG = "isSwarm";
-const SWARM_SIZE_FLAG = "swarmSize";
-const SWARM_SPEED_FLAG = "swarmSpeed";
-const SWARM_IMAGE_FLAG = "swarmImage";
 
-const ANIM_TYPE_FLAG = "animation";
-const ANIM_TYPE_CIRCULAR = "circular";
-const ANIM_TYPE_RAND_SQUARE = "random";
-const ANIM_TYPE_SPIRAL = "spiral";
-const ANIM_TYPE_SKITTER = "skitter";
-const ANIM_TYPE_STOPNMOVE = "move_stop_move";
-const ANIM_TYPE_FORMATION_SQUARE = "formation";
-const ANIM_TYPES = [
+import {
 	ANIM_TYPE_CIRCULAR,
+	ANIM_TYPE_FLAG,
+	ANIM_TYPE_FORMATION_SQUARE,
 	ANIM_TYPE_RAND_SQUARE,
-	ANIM_TYPE_SPIRAL,
 	ANIM_TYPE_SKITTER,
+	ANIM_TYPE_SPIRAL,
 	ANIM_TYPE_STOPNMOVE,
-	ANIM_TYPE_FORMATION_SQUARE
-];
-
-const SETTING_HP_REDUCE = "reduceSwarmWithHP";
-const SETTING_HP_REDUCE_ATTRIBUTE_VALUE = "attributeHpValue";
-const SETTING_HP_REDUCE_ATTRIBUTE_MAX = "attributeHpMax";
-const SETTING_FADE_TIME = "fadeTime";
-const SETTING_STOP_TIME = "stopTime";
-const SETTING_MIGRATED_TO = "migratedTo";
-const theta = 0.01;
-const SIGMA = 5;
-const GAMMA = 1000;
+	GAMMA,
+	MOD_NAME,
+	SETTING_FADE_TIME,
+	SETTING_HP_REDUCE,
+	SETTING_HP_REDUCE_ATTRIBUTE_MAX,
+	SETTING_HP_REDUCE_ATTRIBUTE_VALUE,
+	SETTING_MIGRATED_TO,
+	SETTING_STOP_TIME,
+	SIGMA,
+	SWARM_FLAG,
+	SWARM_SIZE_FLAG,
+	SWARM_SPEED_FLAG,
+	THETA
+} from "./constants.mjs";
 import * as utils from "./utils.mjs";
 
 function Lang(k) {
@@ -444,7 +436,7 @@ export default class Swarm {
 				if (dists2[smallest] < occ[smallest]) {
 					// We are "inside" a player
 					let out = utils.vSub(sp, pcp[smallest]);
-					if (out.x ** 2 + out.y ** 2 > theta) {
+					if (out.x ** 2 + out.y ** 2 > THETA) {
 						let shortest_direction_out_normed = utils.vNorm(out);
 						let distance_left_out = 0.1 + Math.sqrt(occ[smallest]) - Math.sqrt(dists2[smallest]);
 						this.dest[i] = utils.vAdd(
@@ -568,7 +560,7 @@ export default class Swarm {
 			let s = this.sprites[i];
 			let d = utils.vSub(this.dest[i], { x: s.x, y: s.y });
 
-			if (d.x ** 2 + d.y ** 2 > theta) {
+			if (d.x ** 2 + d.y ** 2 > THETA) {
 				let mv = utils.vNorm(d);
 				mv = utils.vMult(mv, 0.05 * ms * this.speeds[i] * 4);
 				if (mv.x ** 2 + mv.y ** 2 > d.x ** 2 + d.y ** 2) {
@@ -788,231 +780,4 @@ Hooks.once("init", () => {
 		type: Number,
 		default: 0
 	});
-});
-
-/*
- █████  █████ █████
-░░███  ░░███ ░░███ 
-░███   ░███  ░███ 
-░███   ░███  ░███ 
-░███   ░███  ░███ 
-░███   ░███  ░███ 
-░░████████   █████
- ░░░░░░░░   ░░░░░  */
-
-function createLabel(text) {
-	const label = document.createElement("label");
-	label.textContent = text;
-	return label;
-}
-
-function createHint(hint, formGroup) {
-	if (!hint) {
-		return;
-	}
-	const p = document.createElement("p");
-	p.classList.add("notes");
-	p.append(hint);
-	formGroup.append(p);
-}
-
-function dropDownConfig({ parent, app, flag_name, default_value, values, hint }) {
-	let flags = app.token.flags;
-	if (flags === undefined) flags = app.token.data.flags;
-
-	const formGroup = document.createElement("div");
-	formGroup.classList.add("form-group");
-	parent.append(formGroup);
-
-	formGroup.append(createLabel("Animation"));
-
-	const formFields = document.createElement("div");
-	formFields.classList.add("form-fields");
-	formGroup.append(formFields);
-
-	const cur = flags?.[MOD_NAME]?.[flag_name] ?? default_value;
-	//parent.append(createLabel(title));
-	const input = document.createElement("select");
-	input.name = "flags." + MOD_NAME + "." + flag_name;
-
-	for (let o of values) {
-		let opt = document.createElement("option");
-		opt.innerText = o;
-		if (cur === o) opt.classList.add("selected");
-		input.append(opt);
-	}
-	input.value = cur;
-
-	formFields.append(input);
-
-	createHint(hint, formGroup);
-}
-
-function textBoxConfig({
-	parent,
-	app,
-	flag_name,
-	title,
-	type = "number",
-	placeholder = null,
-	default_value = null,
-	step = null,
-	hint
-}) {
-	let flags = app.token.flags;
-	if (flags === undefined) flags = app.token.data.flags;
-
-	const formGroup = document.createElement("div");
-	formGroup.classList.add("form-group");
-	formGroup.classList.add("slim");
-	parent.append(formGroup);
-
-	formGroup.append(createLabel(title));
-
-	const formFields = document.createElement("div");
-	formFields.classList.add("form-fields");
-	formGroup.append(formFields);
-
-	const input = document.createElement("input");
-	input.name = "flags." + MOD_NAME + "." + flag_name;
-	input.type = type;
-	if (step) input.step = step;
-	if (placeholder) input.placeholder = placeholder;
-
-	if (flags?.[MOD_NAME]?.[flag_name]) {
-		input.value = flags?.[MOD_NAME]?.[flag_name];
-	} else if (default_value != null) {
-		input.value = default_value;
-	}
-	formFields.append(input);
-	createHint(hint, formGroup);
-}
-
-function createCheckBox({ app, parent, data_name, title, hint }) {
-	const formGroup = document.createElement("div");
-	formGroup.classList.add("form-group");
-	parent.append(formGroup);
-
-	formGroup.append(createLabel(title));
-
-	const input = document.createElement("input");
-	input.name = "flags." + MOD_NAME + "." + data_name;
-	input.type = "checkbox";
-
-	if (app.token.getFlag(MOD_NAME, data_name)) {
-		input.checked = "true";
-	}
-	formGroup.append(input);
-	createHint(hint, formGroup);
-}
-
-function imageSelector(app, flag_name, title) {
-	let data_path = "flags." + MOD_NAME + "." + flag_name;
-
-	let flags = app.token.flags;
-	if (flags === undefined) flags = app.token.data.flags;
-
-	let grp = document.createElement("div");
-	grp.classList.add("form-group");
-	let label = document.createElement("label");
-	label.innerText = title;
-	let fields = document.createElement("div");
-	fields.classList.add("form-fields");
-
-	const button = document.createElement("button");
-	button.classList.add("file-picker");
-	button.type = "button";
-	button.title = "Browse Files";
-	button.tabindex = "-1";
-	button.dataset.target = data_path;
-	button["data-type"] = "imagevideo";
-	button["data-target"] = data_path;
-
-	button.onclick = app._activateFilePicker.bind(app);
-
-	let bi = document.createElement("i");
-	bi.classList.add("fas");
-	bi.classList.add("fa-file-import");
-	bi.classList.add("fa-fw");
-
-	const inpt = document.createElement("input");
-	inpt.name = data_path;
-	inpt.classList.add("image");
-	inpt.type = "text";
-	inpt.title = title;
-	inpt.placeholder = "path/image.png";
-	// Insert the flags current value into the input box
-	if (flags?.[MOD_NAME]?.[flag_name]) {
-		inpt.value = flags?.[MOD_NAME]?.[flag_name];
-	}
-
-	button.append(bi);
-
-	grp.append(label);
-	grp.append(fields);
-
-	fields.append(button);
-	fields.append(inpt);
-	return grp;
-}
-
-// Hook into the token config render
-Hooks.on("renderTokenConfig", (app, html) => {
-	if (!game.user.isGM) return;
-
-	// Create a new form group
-	const parent = document.createElement("fieldset");
-	//
-
-	// Create a legend for this setting
-	const legend = document.createElement("legend");
-	legend.textContent = "Swarm";
-	parent.append(legend);
-
-	createCheckBox({
-		app,
-		parent,
-		data_name: SWARM_FLAG,
-		title: "Swarm Enabled",
-		hint: "Whether this token is a swarm."
-	});
-	textBoxConfig({
-		parent,
-		app,
-		flag_name: SWARM_SIZE_FLAG,
-		title: "Count",
-		placeholder: 20,
-		default_value: 20,
-		step: 1,
-		hint: "Number of sprites in the swarm."
-	});
-	textBoxConfig({
-		parent,
-		app,
-		flag_name: SWARM_SPEED_FLAG,
-		title: "Speed",
-		placeholder: 1.0,
-		default_value: 1.0,
-		step: 0.1,
-		hint: "Animation speed for the swarm."
-	});
-	dropDownConfig({
-		parent,
-		app,
-		flag_name: ANIM_TYPE_FLAG,
-		values: ANIM_TYPES,
-		default_value: ANIM_TYPE_CIRCULAR,
-		hint: "Animation style for the swarm."
-	});
-
-	// Add the form group to the bottom of the Identity tab
-	html[0].querySelector("div[data-tab='character']").append(parent);
-
-	// Add difference swarm image
-	//const swarmImage = imageSelector(app, SWARM_IMAGE_FLAG, "Token for Swarm mobs");
-	// And add the token image selectors to the 'apperance' tab
-	//html[0].querySelector("div[data-tab='appearance']").append(swarmImage);
-
-	// Set the apps height correctly
-	app.setPosition();
 });
