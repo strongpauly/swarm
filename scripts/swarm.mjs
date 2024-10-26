@@ -640,7 +640,7 @@ Hooks.on("refreshToken", (token) => {
 });
 
 Hooks.on("renderTokenConfig", (renderConfig) => {
-	const document = renderConfig.token;
+	const document = renderConfig.token ?? renderConfig.document;
 	const onDrawToken = (token) => {
 		if (token.document.id === document.id) {
 			deleteSwarmOnToken(token);
@@ -651,10 +651,10 @@ Hooks.on("renderTokenConfig", (renderConfig) => {
 	};
 	Hooks.on("drawToken", onDrawToken);
 	Hooks.once("closeTokenConfig", (closeConfig) => {
-		if (closeConfig.token.id === document.id) {
+		const closingDocument = closeConfig.token ?? closeConfig.document;
+		if (closingDocument.id === document.id) {
 			Hooks.off("drawToken", onDrawToken);
-			const { token: document } = closeConfig;
-			const token = document.object;
+			const token = closingDocument.object;
 			if (token) {
 				deleteSwarmOnToken(token);
 				if (document.flags?.[MOD_NAME]?.[SWARM_FLAG]) {
