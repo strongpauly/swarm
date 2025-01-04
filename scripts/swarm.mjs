@@ -468,33 +468,34 @@ export default class Swarm {
 
 	formSquare(ms) {
 		//Calculate length and width
-		let a = Math.ceil(Math.sqrt(this.sprites.length)); //Number of rows
-		let b = Math.ceil(this.sprites.length / a); //Vertical number
-		let c = a - (a * b - this.sprites.length); //last row
-		let angle = this.token.document.rotation * (Math.PI / 180);
-		let center = this.token.center;
+		const rows = Math.ceil(Math.sqrt(this.sprites.length)); //Number of rows
+		const columns = Math.ceil(this.sprites.length / rows); // Vertical number
+		const lastRow = rows - (rows * columns - this.sprites.length); //last row
+		const angle = this.token.document.rotation * (Math.PI / 180);
+		const center = this.token.center;
 
 		for (let i = 0; i < this.sprites.length; ++i) {
-			let s = this.sprites[i];
+			const sprite = this.sprites[i];
 			// Calculate the coordinate position in a square matrix
-			let x = this.token.x + (this.token.w / a) * (((i - c) % a) + 0.5);
-			let y = this.token.y + (this.token.h / b) * (Math.floor((i - c) / a) + 1.5);
-			// separate treatment for the first row
-			if (c > 0 && i < c) {
-				x = this.token.x + (this.token.w / c) * ((i % c) + 0.5);
+			let x = this.token.x + (this.token.w / rows) * (((i - lastRow) % rows) + 0.5);
+			let y = this.token.y + (this.token.h / columns) * (Math.floor((i - lastRow) / rows) + 1.5);
+
+			if (lastRow > 0 && i < lastRow) {
+				x = this.token.x + (this.token.w / lastRow) * ((i % lastRow) + 0.5);
 			}
 
 			//Rotate the square matrix following the token direction
-			let x3 = (x - center.x) * Math.cos(angle) - (y - center.y) * Math.sin(angle) + center.x;
-			let y3 = (x - center.x) * Math.sin(angle) + (y - center.y) * Math.cos(angle) + center.y;
+			const x3 = (x - center.x) * Math.cos(angle) - (y - center.y) * Math.sin(angle) + center.x;
+			const y3 = (x - center.x) * Math.sin(angle) + (y - center.y) * Math.cos(angle) + center.y;
+
 			x = x3;
 			y = y3;
 
 			//Turn to the direction of the token when it is close enough to where it should be in the square.
-			let d = utils.vSub({ x: x, y: y }, { x: s.x, y: s.y });
-			let len = utils.vLen(d);
+			const d = utils.vSub({ x: x, y: y }, { x: sprite.x, y: sprite.y });
+			const len = utils.vLen(d);
 			if (len < SIGMA) {
-				s.rotation = angle;
+				sprite.rotation = angle;
 			} else {
 				this.dest[i] = { x: x, y: y };
 			}
