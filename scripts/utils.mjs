@@ -104,8 +104,12 @@ export function vAngle(p) {
 	// The foundry compatible 'rotation angle' to point along the vector p
 	return 90 + Math.toDegrees(Math.atan2(p.y, p.x));
 }
+/**
+ * The angle matching the vector p
+ * @param {Vec2} p
+ * @returns {Number} The foundry compatible 'rotation angle' to point along the vector p
+ */
 export function vRad(p) {
-	// The foundry compatible 'rotation angle' to point along the vector p
 	return Math.atan2(p.y, p.x);
 }
 
