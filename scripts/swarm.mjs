@@ -558,18 +558,19 @@ export default class Swarm {
 
 	move(ms) {
 		for (let i = 0; i < this.sprites.length; ++i) {
-			let s = this.sprites[i];
-			let d = utils.vSub(this.dest[i], { x: s.x, y: s.y });
+			const sprite = this.sprites[i];
+			const destination = this.dest[i];
+			const diff = utils.vSub(destination, { x: sprite.x, y: sprite.y });
 
-			if (d.x ** 2 + d.y ** 2 > THETA) {
-				let mv = utils.vNorm(d);
+			if (diff.x ** 2 + diff.y ** 2 > THETA) {
+				let mv = utils.vNorm(diff);
 				mv = utils.vMult(mv, 0.05 * ms * this.speeds[i] * 4);
-				if (mv.x ** 2 + mv.y ** 2 > d.x ** 2 + d.y ** 2) {
-					mv = d;
+				if (mv.x ** 2 + mv.y ** 2 > diff.x ** 2 + diff.y ** 2) {
+					mv = diff;
 				}
-				s.x += mv.x;
-				s.y += mv.y;
-				s.rotation = -Math.PI / 2 + utils.vRad(d);
+				sprite.x += mv.x;
+				sprite.y += mv.y;
+				sprite.rotation = -Math.PI / 2 + utils.vRad(diff);
 			}
 		}
 	}
