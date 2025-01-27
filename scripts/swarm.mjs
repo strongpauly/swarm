@@ -205,35 +205,35 @@ export default class Swarm {
 			this.offsets.push(Math.random() * 97);
 			// Pick an image from the list at random
 			let img = images[Math.floor(Math.random() * images.length)];
-			let s = PIXI.Sprite.from(img);
-			s.anchor.set(0.5);
+			const sprite = PIXI.Sprite.from(img);
+			sprite.anchor.set(0.5);
 
 			// Sprites initial position, a random position within this tokens area
-			s.x = this.token.x + Math.random() * this.token.w;
-			s.y = this.token.y + Math.random() * this.token.h;
+			sprite.x = this.token.x + Math.random() * this.token.w;
+			sprite.y = this.token.y + Math.random() * this.token.h;
 			// Hidden initially?
-			s.alpha = hidden ? 0 : 1;
+			sprite.alpha = hidden ? 0 : 1;
 
 			// Start off at scale 0 before image is loaded
-			s.scale.x = 0;
-			s.scale.y = 0;
+			sprite.scale.x = 0;
+			sprite.scale.y = 0;
 
 			// A callback to start the video
 			const start = () => {
 				// Check if the texture selected is a video, and potentially start it
-				const src = s.texture.baseTexture.resource.source;
+				const src = sprite.texture.baseTexture.resource.source;
 				src.loop = true;
 				src.muted = true; // Autostarting videos must explicitly be muted (chrome restriction)
 				if (src.play) src.play();
 			};
-			if (s.texture.baseTexture.valid) {
+			if (sprite.texture.baseTexture.valid) {
 				start();
 			} else {
-				s.texture.baseTexture.on("loaded", start);
+				sprite.texture.baseTexture.on("loaded", start);
 			}
 			// Set the initial destination to its initial position
-			this.dest.push({ x: s.x, y: s.y });
-			this.sprites.push(s);
+			this.dest.push({ x: sprite.x, y: sprite.y });
+			this.sprites.push(sprite);
 			let sf = this.document.getFlag(MOD_NAME, SWARM_SPEED_FLAG);
 			if (sf === undefined) sf = 1;
 
@@ -255,7 +255,7 @@ export default class Swarm {
 			// Add 50% of the speed as variability on each sprites speed
 			this.speeds.push(sf * 0.5 + sf * Math.random() * 0.5);
 			// Add this sprite to the correct layer
-			this.layer.addChild(s);
+			this.layer.addChild(sprite);
 		}
 	}
 
