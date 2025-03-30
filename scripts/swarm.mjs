@@ -67,20 +67,40 @@ function getHealthEstimate(token) {
 	let reduceHP = game.settings.get(MOD_NAME, SETTING_HP_REDUCE);
 	if (!reduceHP) return 1; // always return 100% health
 
+	let currentProperty;
+	let maxProperty;
+
 	switch (game.system.id) {
 		case "pf1":
 		case "pf2e":
 		case "dnd5e":
 		case "D35E":
-			return token.actor.system.attributes.hp.value / token.actor.system.attributes.hp.max;
+			currentProperty = "actor.system.attributes.hp.value";
+			maxProperty = "actor.system.attributes.hp.max";
+			break;
+		case "wfrp4e":
+			currentProperty = "actor.system.status.wounds.value";
+			maxProperty = "actor.system.status.wounds.max";
+			break;
 		default:
-			let hpValue = Object.byString(token, game.settings.get(MOD_NAME, SETTING_HP_REDUCE_ATTRIBUTE_VALUE));
-			let hpMax = Object.byString(token, game.settings.get(MOD_NAME, SETTING_HP_REDUCE_ATTRIBUTE_MAX));
-			if (hpValue && hpMax) {
-				return hpValue / hpMax;
-			} else {
-				console.warn("No health estimate implemented for system", game.system.id);
-			}
+			currentProperty = game.settings.get(MOD_NAME, SETTING_HP_REDUCE_ATTRIBUTE_VALUE);
+			maxProperty = game.settings.get(MOD_NAME, SETTING_HP_REDUCE_ATTRIBUTE_MAX);
+			break;
+	}
+	if (!currentProperty || !maxProperty) {
+		console.warn("No health estimate implemented");
+		return 1;
+	}
+	try {
+		const hpValue = foundry.utils.getProperty(token, currentProperty);
+		const hpMax = foundry.utils.getProperty(token, maxProperty);
+		if (typeof hpValue === "number" && typeof hpMax === "number") {
+			return hpValue / hpMax;
+		}
+	} catch (ex) {
+		console.warn("Error estimating health");
+		console.error(ex);
+		return 1;
 	}
 }
 
