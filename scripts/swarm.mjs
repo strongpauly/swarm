@@ -92,8 +92,8 @@ function getHealthEstimate(token) {
 	} catch (ex) {
 		console.warn("Error estimating health");
 		console.error(ex);
-		return 1;
 	}
+	return 1;
 }
 
 /**
