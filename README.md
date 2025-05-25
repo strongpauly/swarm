@@ -9,8 +9,9 @@ Install by searching for _swarm_ in the module browsing tool or manually using t
 
 ## Usage
 
-Right click any token (or an actors prototype token) and bring up the token config.
-<img width="479" src="https://github.com/user-attachments/assets/930d1bf8-3713-47d1-a73c-295f8bd4925c">
+Right click any token (or an actors prototype token) and bring up the token config.  The Swarm configuration can be found in the Appearance tab.
+
+<img width="562" alt="Token configuration" src="https://github.com/user-attachments/assets/35d46281-9083-41fb-9c9c-041f49f64056" />
 
 -   Enable your swarm by checking the box **Swarm Enabled**
 -   **Count** is the number of critters in your swarm
