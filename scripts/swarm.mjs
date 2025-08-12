@@ -117,26 +117,44 @@ const SWARMS = {};
 // TODO: Remove debug accessor
 window.SWARMS = SWARMS;
 
-class SwarmContainer extends PIXI.Container {
-	constructor(token, document) {
-		super();
-		this.token = token;
-		this.document = document;
+// class SwarmContainer extends PIXI.Container {
+// 	constructor(token, document) {
+// 		super();
+// 		this.token = token;
+// 		this.document = document;
+// 	}
+
+// 	get name() {
+// 		return `Swarm.${this.token.id}`;
+// 	}
+
+// 	get alpha() {
+// 		return this.token.isVisible ? this.document.alpha : 0;
+// 	}
+
+// 	set alpha(_v) {}
+
+// 	get sortLayer() {
+// 		return this.token.mesh.sortLayer;
+// 	}
+// }
+
+class SwarmContainer extends PrimarySpriteMesh {
+	_render(_renderer) {
+		// Base Sprite shouldn't be rendered
 	}
 
-	get name() {
-		return `Swarm.${this.token.id}`;
+	get rotation() {
+		return 0;
 	}
 
-	get alpha() {
-		return this.token.isVisible ? this.document.alpha : 0;
+	set rotation(_v) {}
+
+	get angle() {
+		return 0;
 	}
 
-	set alpha(_v) {}
-
-	get sortLayer() {
-		return this.token.mesh.sortLayer;
-	}
+	set angle(_v) {}
 }
 
 export default class Swarm {
@@ -153,36 +171,38 @@ export default class Swarm {
 		this.speeds = [];
 		this.offsets = [];
 		this.waiting = [];
-		const swarm = (this.layer = new SwarmContainer(token, document));
+		// const swarm = (this.layer = new SwarmContainer(token, document));
+		this.layer = token.mesh;
+		token.swarm = this;
 
 		// this.randomRotation = true;
 		this.faded = document.hidden;
 		this.visible = this.faded ? 0 : this.number;
 
-		Object.defineProperty(token.mesh, "alpha", {
-			get() {
-				return 0;
-			},
-			set(_v) {},
-			configurable: true,
-			enumerable: true
-		});
+		// Object.defineProperty(token.mesh, "alpha", {
+		// 	get() {
+		// 		return 0;
+		// 	},
+		// 	set(_v) {},
+		// 	configurable: true,
+		// 	enumerable: true
+		// });
 
-		if (this.token._TMFXgetSprite && !this.token._old_TMFXgetSprite) {
-			// Override sprite for Token Magic
-			this.token._old_TMFXgetSprite = this.token._TMFXgetSprite;
-			this.token._TMFXgetSprite = function () {
-				return swarm;
-			}.bind(this.token);
-			// Re set filters on new sprite
-			if (typeof TokenMagic !== "undefined") {
-				setTimeout(() => {
-					TokenMagic._singleLoadFilters(this.token);
-				}, 0);
-			}
-		}
+		// if (this.token._TMFXgetSprite && !this.token._old_TMFXgetSprite) {
+		// 	// Override sprite for Token Magic
+		// 	this.token._old_TMFXgetSprite = this.token._TMFXgetSprite;
+		// 	this.token._TMFXgetSprite = function () {
+		// 		return swarm;
+		// 	}.bind(this.token);
+		// 	// Re set filters on new sprite
+		// 	if (typeof TokenMagic !== "undefined") {
+		// 		setTimeout(() => {
+		// 			TokenMagic._singleLoadFilters(this.token);
+		// 		}, 0);
+		// 	}
+		// }
 
-		canvas.primary.addChild(this.layer);
+		// canvas.primary.addChild(this.layer);
 
 		this.setElevation(document.elevation);
 		this.setSort(this.token.sort ?? 0);
@@ -434,21 +454,21 @@ export default class Swarm {
 			s.destroy();
 		}
 		this.tick.destroy();
-		Object.defineProperty(this.token.mesh, "alpha", {
-			value: this.document.alpha,
-			configurable: true,
-			enumerable: true,
-			writable: true
-		});
-		if (this.token._old_TMFXgetSprite) {
-			this.token._TMFXgetSprite = this.token._old_TMFXgetSprite.bind(this.token);
-			delete this.token._old_TMFXgetSprite;
-			// Re set filters on new sprite
-			if (typeof TokenMagic !== "undefined") {
-				TokenMagic._singleLoadFilters(this.token);
-			}
-		}
-		this.layer.destroy();
+		// Object.defineProperty(this.token.mesh, "alpha", {
+		// 	value: this.document.alpha,
+		// 	configurable: true,
+		// 	enumerable: true,
+		// 	writable: true
+		// });
+		// if (this.token._old_TMFXgetSprite) {
+		// 	this.token._TMFXgetSprite = this.token._old_TMFXgetSprite.bind(this.token);
+		// 	delete this.token._old_TMFXgetSprite;
+		// 	// Re set filters on new sprite
+		// 	if (typeof TokenMagic !== "undefined") {
+		// 		TokenMagic._singleLoadFilters(this.token);
+		// 	}
+		// }
+		// this.layer.destroy();
 		Hooks.call("destroySwarm", this);
 	}
 
@@ -815,5 +835,14 @@ Hooks.once("init", () => {
 		config: false,
 		type: Number,
 		default: 0
+	});
+
+	libWrapper.register(MOD_NAME, "PrimaryCanvasGroup.prototype.addToken", function (wrapped, token) {
+		if (!token.document.getFlag(MOD_NAME, SWARM_FLAG)) {
+			return wrapped(token);
+		}
+		const swarm = new SwarmContainer(token, token.document);
+		this.addChild(swarm);
+		return swarm;
 	});
 });
