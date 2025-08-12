@@ -96,13 +96,11 @@ function getHealthEstimate(token) {
 				case "pf2e":
 				case "dnd5e":
 				case "D35E":
-					return hpValue / hpMax;
 				case "wfrp4e":
-					return hpValue / hpMax;
-				case "swade":
-					return hpMax == 0 ? 1 : Math.max(hpMax - hpValue, 0) / Math.max(hpMax, 1);
 				default:
 					return hpValue / hpMax;
+				case "swade":
+					return hpMax === 0 ? 1 : Math.max(hpMax - hpValue, 0) / Math.max(hpMax, 1);
 			}
 		}
 	} catch (ex) {
