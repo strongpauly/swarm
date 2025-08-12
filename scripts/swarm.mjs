@@ -74,6 +74,10 @@ function getHealthEstimate(token) {
 			currentProperty = "actor.system.status.wounds.value";
 			maxProperty = "actor.system.status.wounds.max";
 			break;
+		case "swade":
+			currentProperty = "actor.system.wounds.value";
+			maxProperty = "actor.system.wounds.max";
+			break;
 		default:
 			currentProperty = game.settings.get(MOD_NAME, SETTING_HP_REDUCE_ATTRIBUTE_VALUE);
 			maxProperty = game.settings.get(MOD_NAME, SETTING_HP_REDUCE_ATTRIBUTE_MAX);
@@ -87,7 +91,19 @@ function getHealthEstimate(token) {
 		const hpValue = foundry.utils.getProperty(token, currentProperty);
 		const hpMax = foundry.utils.getProperty(token, maxProperty);
 		if (typeof hpValue === "number" && typeof hpMax === "number") {
-			return hpValue / hpMax;
+			switch (game.system.id) {
+				case "pf1":
+				case "pf2e":
+				case "dnd5e":
+				case "D35E":
+					return hpValue / hpMax;
+				case "wfrp4e":
+					return hpValue / hpMax;
+				case "swade":
+					return hpMax == 0 ? 1 : Math.max(hpMax - hpValue, 0) / Math.max(hpMax, 1);
+				default:
+					return hpValue / hpMax;
+			}
 		}
 	} catch (ex) {
 		console.warn("Error estimating health");
