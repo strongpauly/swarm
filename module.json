@@ -19,6 +19,7 @@
 	"url": "#{URL}#",
 	"manifest": "#{MANIFEST}#",
 	"download": "#{DOWNLOAD}#",
+	"changelog": "https://github.com/strongpauly/swarm/releases/tag/#{VERSION}#",
 	"languages": [
 		{
 			"lang": "en",
