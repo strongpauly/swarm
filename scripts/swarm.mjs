@@ -372,10 +372,21 @@ export default class Swarm {
 			if (!sprite.texture.valid) {
 				return;
 			}
-			// Get the largest dimension, and scale around that
+			// Compute the largest texture dimension
 			const smax = Math.max(sprite.texture.width, sprite.texture.height);
-			const x = (this.document.texture.scaleX * canvas.grid.size) / smax;
-			const y = (this.document.texture.scaleY * canvas.grid.size) / smax;
+
+			// Normalize the document texture scale by the token's tile dimensions so
+			// changing how many tiles the token spans does not change the sprite scale.
+			// This keeps sprite.scale independent of token.document.width/height.
+			const tilesX = Math.max(1, this.token.document?.width || 1);
+			const tilesY = Math.max(1, this.token.document?.height || tilesX);
+
+			const desiredWorldX = (this.document.texture.scaleX * canvas.grid.size) / tilesX;
+			const desiredWorldY = (this.document.texture.scaleY * canvas.grid.size) / tilesY;
+
+			// Convert desired world pixels to sprite-local scale (texture pixels -> scale)
+			const x = (desiredWorldX / smax) * 4;
+			const y = (desiredWorldY / smax) * 4;
 			return { x, y };
 		};
 
