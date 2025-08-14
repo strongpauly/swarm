@@ -239,6 +239,25 @@ export default class Swarm {
 		Hooks.call("createSwarm", this);
 	}
 
+	/**
+	 * Return token-local (unscaled) dimensions that compensate for the token mesh scale.
+	 * Use these for position/destination math so token.scale only changes visual size.
+	 * @returns {{w:number,h:number,scaleX:number,scaleY:number}}
+	 */
+	_getLocalSize() {
+		const mesh = this.token?.mesh;
+		const scaleX = mesh?.scale?.x ?? 1;
+		const scaleY = mesh?.scale?.y ?? scaleX;
+		// token.w / scaleX gives the local coordinate width such that after parent-scaling
+		// worldWidth = localWidth * scaleX === this.token.w (old behaviour).
+		return {
+			w: this.token.w / scaleX,
+			h: this.token.h / scaleY,
+			scaleX,
+			scaleY
+		};
+	}
+
 	async createSprites(number) {
 		const use_random_image = this.token.actor.prototypeToken.randomImg;
 		const hidden = this.document.hidden;
@@ -252,6 +271,8 @@ export default class Swarm {
 
 		const anim = this.document.getFlag(MOD_NAME, ANIM_TYPE_FLAG);
 
+		const { w: localW, h: localH } = this._getLocalSize();
+
 		for (let i = 0; i < number; ++i) {
 			// waiting times, only used for stop-move
 			this.waiting.push(0);
@@ -263,8 +284,8 @@ export default class Swarm {
 			sprite.anchor.set(0.5);
 
 			// Sprites initial position, a random position within this tokens area
-			sprite.x = Math.random() * this.token.w - this.token.w / 2;
-			sprite.y = Math.random() * this.token.h - this.token.h / 2;
+			sprite.x = Math.random() * localW - localW / 2;
+			sprite.y = Math.random() * localH - localH / 2;
 			// Hidden initially?
 			sprite.alpha = hidden ? 0 : 1;
 
@@ -510,14 +531,16 @@ export default class Swarm {
 	}
 
 	stopMoveStop(ms) {
+		const { w: localW, h: localH } = this._getLocalSize();
+
 		for (let i = 0; i < this.sprites.length; ++i) {
 			let s = this.sprites[i];
 			let d = utils.vSub(this.dest[i], { x: s.x, y: s.y });
 			if (d.x ** 2 + d.y ** 2 < SIGMA) {
 				if (this.waiting[i] <= 0) {
 					this.dest[i] = {
-						x: Math.random() * this.token.w - this.token.w / 2,
-						y: Math.random() * this.token.h - this.token.h / 2
+						x: Math.random() * localW - localW / 2,
+						y: Math.random() * localH - localH / 2
 					};
 					this.waiting[i] = Math.random() * game.settings.get(MOD_NAME, SETTING_STOP_TIME) * 1000;
 				} else {
@@ -528,31 +551,46 @@ export default class Swarm {
 	}
 
 	formSquare(ms) {
-		//Calculate length and width
-		const rows = Math.ceil(Math.sqrt(this.sprites.length)); //Number of rows
-		const columns = Math.ceil(this.sprites.length / rows); // Vertical number
-		const lastRow = rows - (rows * columns - this.sprites.length); //last row
+		// Number of sprites
+		const n = this.sprites.length;
+
+		// Compute a compact grid: cols x rows
+		const cols = Math.ceil(Math.sqrt(n));
+		const rows = Math.ceil(n / cols);
+
 		const angle = this.token.document.rotation * (Math.PI / 180);
-		const localCenter = { x: this.token.w / 2, y: this.token.h / 2 };
+		const { w: localW, h: localH } = this._getLocalSize();
+		const center = { x: localW / 2, y: localH / 2 };
 
-		for (let i = 0; i < this.sprites.length; ++i) {
+		const cellW = localW / cols;
+		const cellH = localH / rows;
+
+		for (let i = 0; i < n; ++i) {
 			const sprite = this.sprites[i];
-			// Calculate the coordinate position in a square matrix (top-left style)
-			let x = (this.token.w / rows) * (((i - lastRow) % rows) + 0.5);
-			let y = (this.token.h / columns) * (Math.floor((i - lastRow) / rows) + 1.5);
 
-			if (lastRow > 0 && i < lastRow) {
-				x = (this.token.w / lastRow) * ((i % lastRow) + 0.5);
-			}
+			// Row/column in logical grid (top-left origin)
+			const row = Math.floor(i / cols);
+			const indexInRow = i - row * cols;
 
-			// Rotate the square matrix following the token direction (still computed top-left based)
-			const destX = (x - localCenter.x) * Math.cos(angle) - (y - localCenter.y) * Math.sin(angle) + localCenter.x;
-			const destY = (x - localCenter.x) * Math.sin(angle) + (y - localCenter.y) * Math.cos(angle) + localCenter.y;
+			// If this is the last row and it's not full, center the items in that row
+			const itemsInThisRow = row === rows - 1 ? n - (rows - 1) * cols : cols;
+			const rowOffsetX = (localW - itemsInThisRow * cellW) / 2;
 
-			// Convert the destination into center-relative coordinates
-			const dest = { x: destX - localCenter.x, y: destY - localCenter.y };
+			// Position in top-left local coordinates (0..localW, 0..localH)
+			const x = rowOffsetX + (indexInRow + 0.5) * cellW;
+			const y = (row + 0.5) * cellH;
 
-			// Turn to the direction of the token when it is close enough to where it should be in the square.
+			// Rotate around the token center:
+			// translate to center, rotate, translate back
+			const tx = x - center.x;
+			const ty = y - center.y;
+			const cosA = Math.cos(angle);
+			const sinA = Math.sin(angle);
+			const rx = tx * cosA - ty * sinA;
+			const ry = tx * sinA + ty * cosA;
+			const dest = { x: rx, y: ry };
+
+			// Use utils for distance check / rotation snapping
 			const d = utils.vSub(dest, { x: sprite.x, y: sprite.y });
 			const len = utils.vLen(d);
 			if (len < SIGMA) {
@@ -564,14 +602,16 @@ export default class Swarm {
 	}
 
 	randSquare(ms) {
+		const { w: localW, h: localH } = this._getLocalSize();
+
 		for (let i = 0; i < this.sprites.length; ++i) {
 			let s = this.sprites[i];
 			let d = utils.vSub(this.dest[i], { x: s.x, y: s.y });
 			let len = utils.vLen(d);
 			if (len < SIGMA || len > GAMMA) {
 				this.dest[i] = {
-					x: Math.random() * this.token.w - this.token.w / 2,
-					y: Math.random() * this.token.h - this.token.h / 2
+					x: Math.random() * localW - localW / 2,
+					y: Math.random() * localH - localH / 2
 				};
 			}
 		}
@@ -579,8 +619,9 @@ export default class Swarm {
 
 	spiral(ms) {
 		this.t += ms / 30;
-		const rx = 0.5 * this.token.w;
-		const ry = 0.5 * this.token.h;
+		const { w: localW, h: localH } = this._getLocalSize();
+		const rx = 0.5 * localW;
+		const ry = 0.5 * localH;
 		for (let i = 0; i < this.sprites.length; ++i) {
 			const t = this.speeds[i] * this.t * 0.02 + this.offsets[i];
 			const x = Math.cos(t);
@@ -593,7 +634,6 @@ export default class Swarm {
 			const final_x = rx * x * ci - ry * y * si;
 			const final_y = rx * x * si + ry * y * ci;
 
-			// NEW: final_x/final_y are already center-relative; keep them that way
 			this.dest[i] = {
 				x: final_x,
 				y: final_y
@@ -603,8 +643,10 @@ export default class Swarm {
 
 	circular(ms) {
 		this.t += ms / 30;
-		const _rx = 0.5 * this.token.w;
-		const _ry = 0.5 * this.token.h;
+		const { w: localW, h: localH } = this._getLocalSize();
+
+		const _rx = 0.5 * localW;
+		const _ry = 0.5 * localH;
 
 		for (let i = 0; i < this.sprites.length; ++i) {
 			const t = this.t * 0.02 + this.offsets[i];
