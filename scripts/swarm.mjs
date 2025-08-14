@@ -263,8 +263,8 @@ export default class Swarm {
 			sprite.anchor.set(0.5);
 
 			// Sprites initial position, a random position within this tokens area
-			sprite.x = this.token.x + Math.random() * this.token.w;
-			sprite.y = this.token.y + Math.random() * this.token.h;
+			sprite.x = Math.random() * this.token.w - this.token.w / 2;
+			sprite.y = Math.random() * this.token.h - this.token.h / 2;
 			// Hidden initially?
 			sprite.alpha = hidden ? 0 : 1;
 
@@ -475,29 +475,35 @@ export default class Swarm {
 	skitter(ms) {
 		this.stopMoveStop(ms);
 
-		let pcs = canvas.tokens.placeables.filter((t) => t.actor.hasPlayerOwner);
-		let pcp = pcs.map((t) => t.center);
-		let occ = pcs.map((t) => (0.55 * t.w) ** 2);
+		const pcs = canvas.tokens.placeables.filter((t) => t.actor.hasPlayerOwner);
+		if (!pcs.length) return;
 
-		if (pcs.length > 0) {
-			for (let i = 0; i < this.sprites.length; ++i) {
-				let s = this.sprites[i];
-				let sp = { x: s.x, y: s.y };
-				let dists2 = pcp.map((p) => {
-					return (s.x - p.x) ** 2 + (s.y - p.y) ** 2;
-				});
-				let smallest = utils.argMin(dists2);
-				if (dists2[smallest] < occ[smallest]) {
-					// We are "inside" a player
-					let out = utils.vSub(sp, pcp[smallest]);
-					if (out.x ** 2 + out.y ** 2 > THETA) {
-						let shortest_direction_out_normed = utils.vNorm(out);
-						let distance_left_out = 0.1 + Math.sqrt(occ[smallest]) - Math.sqrt(dists2[smallest]);
-						this.dest[i] = utils.vAdd(
-							sp,
-							utils.vMult(shortest_direction_out_normed, 1.5 * distance_left_out)
-						);
-					}
+		const pcp = pcs.map((t) => t.center);
+		const occ = pcs.map((t) => (0.55 * t.w) ** 2);
+
+		for (let i = 0; i < this.sprites.length; ++i) {
+			const s = this.sprites[i];
+			// sprite's global position: convert from center-relative local -> global using token.center
+			const sp = { x: s.x + this.token.center.x, y: s.y + this.token.center.y };
+
+			const dists2 = pcp.map((p) => (sp.x - p.x) ** 2 + (sp.y - p.y) ** 2);
+			const smallest = utils.argMin(dists2);
+
+			if (dists2[smallest] < occ[smallest]) {
+				// We are "inside" a player
+				const out = utils.vSub(sp, pcp[smallest]);
+				if (out.x ** 2 + out.y ** 2 > THETA) {
+					const shortest_direction_out_normed = utils.vNorm(out);
+					const distance_left_out = 0.1 + Math.sqrt(occ[smallest]) - Math.sqrt(dists2[smallest]);
+					const newDestGlobal = utils.vAdd(
+						sp,
+						utils.vMult(shortest_direction_out_normed, 1.5 * distance_left_out)
+					);
+					// convert back to local coordinates relative to token center
+					this.dest[i] = {
+						x: newDestGlobal.x - this.token.center.x,
+						y: newDestGlobal.y - this.token.center.y
+					};
 				}
 			}
 		}
@@ -509,9 +515,10 @@ export default class Swarm {
 			let d = utils.vSub(this.dest[i], { x: s.x, y: s.y });
 			if (d.x ** 2 + d.y ** 2 < SIGMA) {
 				if (this.waiting[i] <= 0) {
-					let x = this.token.x + Math.random() * this.token.w;
-					let y = this.token.y + Math.random() * this.token.h;
-					this.dest[i] = { x: x, y: y };
+					this.dest[i] = {
+						x: Math.random() * this.token.w - this.token.w / 2,
+						y: Math.random() * this.token.h - this.token.h / 2
+					};
 					this.waiting[i] = Math.random() * game.settings.get(MOD_NAME, SETTING_STOP_TIME) * 1000;
 				} else {
 					this.waiting[i] -= ms;
@@ -526,32 +533,32 @@ export default class Swarm {
 		const columns = Math.ceil(this.sprites.length / rows); // Vertical number
 		const lastRow = rows - (rows * columns - this.sprites.length); //last row
 		const angle = this.token.document.rotation * (Math.PI / 180);
-		const center = this.token.center;
+		const localCenter = { x: this.token.w / 2, y: this.token.h / 2 };
 
 		for (let i = 0; i < this.sprites.length; ++i) {
 			const sprite = this.sprites[i];
-			// Calculate the coordinate position in a square matrix
-			let x = this.token.x + (this.token.w / rows) * (((i - lastRow) % rows) + 0.5);
-			let y = this.token.y + (this.token.h / columns) * (Math.floor((i - lastRow) / rows) + 1.5);
+			// Calculate the coordinate position in a square matrix (top-left style)
+			let x = (this.token.w / rows) * (((i - lastRow) % rows) + 0.5);
+			let y = (this.token.h / columns) * (Math.floor((i - lastRow) / rows) + 1.5);
 
 			if (lastRow > 0 && i < lastRow) {
-				x = this.token.x + (this.token.w / lastRow) * ((i % lastRow) + 0.5);
+				x = (this.token.w / lastRow) * ((i % lastRow) + 0.5);
 			}
 
-			//Rotate the square matrix following the token direction
-			const x3 = (x - center.x) * Math.cos(angle) - (y - center.y) * Math.sin(angle) + center.x;
-			const y3 = (x - center.x) * Math.sin(angle) + (y - center.y) * Math.cos(angle) + center.y;
+			// Rotate the square matrix following the token direction (still computed top-left based)
+			const destX = (x - localCenter.x) * Math.cos(angle) - (y - localCenter.y) * Math.sin(angle) + localCenter.x;
+			const destY = (x - localCenter.x) * Math.sin(angle) + (y - localCenter.y) * Math.cos(angle) + localCenter.y;
 
-			x = x3;
-			y = y3;
+			// Convert the destination into center-relative coordinates
+			const dest = { x: destX - localCenter.x, y: destY - localCenter.y };
 
-			//Turn to the direction of the token when it is close enough to where it should be in the square.
-			const d = utils.vSub({ x: x, y: y }, { x: sprite.x, y: sprite.y });
+			// Turn to the direction of the token when it is close enough to where it should be in the square.
+			const d = utils.vSub(dest, { x: sprite.x, y: sprite.y });
 			const len = utils.vLen(d);
 			if (len < SIGMA) {
 				sprite.rotation = angle;
 			} else {
-				this.dest[i] = { x: x, y: y };
+				this.dest[i] = dest;
 			}
 		}
 	}
@@ -562,50 +569,58 @@ export default class Swarm {
 			let d = utils.vSub(this.dest[i], { x: s.x, y: s.y });
 			let len = utils.vLen(d);
 			if (len < SIGMA || len > GAMMA) {
-				let x = this.token.x + Math.random() * this.token.w;
-				let y = this.token.y + Math.random() * this.token.h;
-				this.dest[i] = { x: x, y: y };
+				this.dest[i] = {
+					x: Math.random() * this.token.w - this.token.w / 2,
+					y: Math.random() * this.token.h - this.token.h / 2
+				};
 			}
 		}
 	}
+
 	spiral(ms) {
 		this.t += ms / 30;
-		let rx = 0.5 * this.token.w;
-		let ry = 0.5 * this.token.h;
+		const rx = 0.5 * this.token.w;
+		const ry = 0.5 * this.token.h;
 		for (let i = 0; i < this.sprites.length; ++i) {
-			let t = this.speeds[i] * this.t * 0.02 + this.offsets[i];
-			let x = Math.cos(t);
-			let y = 0.4 * Math.sin(t);
+			const t = this.speeds[i] * this.t * 0.02 + this.offsets[i];
+			const x = Math.cos(t);
+			const y = 0.4 * Math.sin(t);
 
-			let ci = Math.cos(t / (2 * Math.E));
-			let si = Math.sin(t / (2 * Math.E));
+			const angle = t / (2 * Math.E);
+			const ci = Math.cos(angle);
+			const si = Math.sin(angle);
+
+			const final_x = rx * x * ci - ry * y * si;
+			const final_y = rx * x * si + ry * y * ci;
+
+			// NEW: final_x/final_y are already center-relative; keep them that way
 			this.dest[i] = {
-				x: rx * (ci * x - si * y) + this.token.center.x,
-				y: ry * (si * x + ci * y) + this.token.center.y
+				x: final_x,
+				y: final_y
 			};
 		}
 	}
+
 	circular(ms) {
 		this.t += ms / 30;
-		let _rx = 1 * 0.5 * this.token.w;
-		let _ry = 1 * 0.5 * this.token.h;
+		const _rx = 0.5 * this.token.w;
+		const _ry = 0.5 * this.token.h;
 
 		for (let i = 0; i < this.sprites.length; ++i) {
-			let t = this.t * 0.02 + this.offsets[i];
-			let rY =
-				1 *
-				(0.5 + 0.5 * (1.0 * Math.sin(t * 0.3) + 0.3 * Math.sin(2 * t + 0.8) + 0.26 * Math.sin(3 * t + 0.8)));
-			let x = Math.cos(t * this.speeds[i]);
-			let y = rY * Math.sin(t * this.speeds[i]);
+			const t = this.t * 0.02 + this.offsets[i];
+			const rY = 0.5 + 0.5 * (Math.sin(t * 0.3) + 0.3 * Math.sin(2 * t + 0.8) + 0.26 * Math.sin(3 * t + 0.8));
+			const x = Math.cos(t * this.speeds[i]);
+			const y = rY * Math.sin(t * this.speeds[i]);
 
-			let ci = Math.cos(this.offsets[i]);
-			let si = Math.sin(this.offsets[i]);
-			let rx = _rx * (ci * x - si * y);
-			let ry = _ry * (si * x + ci * y);
+			const ci = Math.cos(this.offsets[i]);
+			const si = Math.sin(this.offsets[i]);
+
+			const final_x = _rx * x * ci - _ry * y * si;
+			const final_y = _rx * x * si + _ry * y * ci;
 
 			this.dest[i] = {
-				x: rx + this.token.center.x,
-				y: ry + this.token.center.y
+				x: final_x,
+				y: final_y
 			};
 		}
 	}
