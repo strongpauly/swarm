@@ -117,28 +117,6 @@ const SWARMS = {};
 // TODO: Remove debug accessor
 window.SWARMS = SWARMS;
 
-// class SwarmContainer extends PIXI.Container {
-// 	constructor(token, document) {
-// 		super();
-// 		this.token = token;
-// 		this.document = document;
-// 	}
-
-// 	get name() {
-// 		return `Swarm.${this.token.id}`;
-// 	}
-
-// 	get alpha() {
-// 		return this.token.isVisible ? this.document.alpha : 0;
-// 	}
-
-// 	set alpha(_v) {}
-
-// 	get sortLayer() {
-// 		return this.token.mesh.sortLayer;
-// 	}
-// }
-
 class SwarmContainer extends PrimarySpriteMesh {
 	_render(_renderer) {
 		// Base Sprite shouldn't be rendered
@@ -179,15 +157,6 @@ export default class Swarm {
 		this.faded = document.hidden;
 		this.visible = this.faded ? 0 : this.number;
 
-		// Object.defineProperty(token.mesh, "alpha", {
-		// 	get() {
-		// 		return 0;
-		// 	},
-		// 	set(_v) {},
-		// 	configurable: true,
-		// 	enumerable: true
-		// });
-
 		// if (this.token._TMFXgetSprite && !this.token._old_TMFXgetSprite) {
 		// 	// Override sprite for Token Magic
 		// 	this.token._old_TMFXgetSprite = this.token._TMFXgetSprite;
@@ -201,8 +170,6 @@ export default class Swarm {
 		// 		}, 0);
 		// 	}
 		// }
-
-		// canvas.primary.addChild(this.layer);
 
 		this.setElevation(document.elevation);
 		this.setSort(this.token.sort ?? 0);
@@ -486,12 +453,6 @@ export default class Swarm {
 			s.destroy();
 		}
 		this.tick.destroy();
-		// Object.defineProperty(this.token.mesh, "alpha", {
-		// 	value: this.document.alpha,
-		// 	configurable: true,
-		// 	enumerable: true,
-		// 	writable: true
-		// });
 		// if (this.token._old_TMFXgetSprite) {
 		// 	this.token._TMFXgetSprite = this.token._old_TMFXgetSprite.bind(this.token);
 		// 	delete this.token._old_TMFXgetSprite;
@@ -500,7 +461,6 @@ export default class Swarm {
 		// 		TokenMagic._singleLoadFilters(this.token);
 		// 	}
 		// }
-		// this.layer.destroy();
 		Hooks.call("destroySwarm", this);
 	}
 
