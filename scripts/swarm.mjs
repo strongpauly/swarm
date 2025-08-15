@@ -671,7 +671,7 @@ const swarmNeedsRefresh = (changes) => {
 
 Hooks.on("preUpdateToken", (document, changes) => {
 	if (swarmNeedsRefresh(changes)) {
-		token.swarm?.destroy();
+		document.object.swarm?.destroy();
 	}
 });
 
@@ -695,8 +695,12 @@ Hooks.on("updateToken", (document, changes) => {
 });
 
 Hooks.on("refreshToken", (token) => {
-	if (token.document.getFlag(MOD_NAME, SWARM_FLAG) === true && !token.swarm && token.mesh) {
-		createSwarmOnToken(token);
+	if (token.document.getFlag(MOD_NAME, SWARM_FLAG) === true) {
+		if (!token.swarm && token.mesh) {
+			createSwarmOnToken(token);
+		}
+	} else if (token.swarm) {
+		token.swarm.destroy();
 	}
 });
 
@@ -825,12 +829,6 @@ Hooks.once("init", () => {
 		}
 		const swarm = new SwarmContainer(token, token.document);
 		this.addChild(swarm);
-		// if (!(token.mesh instanceof SwarmContainer)) {
-		// 	try {
-		// 		token.mesh = swarm;
-		// 		createSwarmOnToken(token, token.document);
-		// 	} catch (ex) {}
-		// }
 		return swarm;
 	});
 });
