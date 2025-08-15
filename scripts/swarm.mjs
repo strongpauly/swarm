@@ -135,7 +135,7 @@ class SwarmContainer extends PrimarySpriteMesh {
 	set angle(_v) {}
 }
 
-export default class Swarm {
+export class Swarm {
 	constructor(token, document = token.document) {
 		const number = document.getFlag(MOD_NAME, SWARM_SIZE_FLAG);
 		this.t = 0;
@@ -149,7 +149,6 @@ export default class Swarm {
 		this.speeds = [];
 		this.offsets = [];
 		this.waiting = [];
-		// const swarm = (this.layer = new SwarmContainer(token, document));
 		this.layer = token.mesh;
 		token.swarm = this;
 
@@ -757,9 +756,6 @@ Hooks.on("deleteToken", (token, options, user_id) => {
 	}
 });
 
-const isSwarmingToken = (t) => !!t.document.getFlag(MOD_NAME, SWARM_FLAG);
-const getSwarmingTokens = () => canvas.tokens.placeables.filter(isSwarmingToken);
-
 Hooks.on("ready", async () => {
 	if (game.settings.get(MOD_NAME, SETTING_MIGRATED_TO) < 11.0) {
 		ui.notifications.notify(`Migrating Swarms.  Please don't refresh your browser.`);
@@ -786,13 +782,6 @@ Hooks.on("ready", async () => {
 	}
 });
 
-Hooks.on("canvasReady", () => {
-	// Scene loaded.
-	for (let s of getSwarmingTokens()) {
-		createSwarmOnToken(s);
-	}
-});
-
 //Only in V10+
 Hooks.on("canvasTearDown", (a, b) => {
 	for (let key of Object.keys(SWARMS)) {
@@ -800,19 +789,6 @@ Hooks.on("canvasTearDown", (a, b) => {
 		delete SWARMS[key];
 	}
 });
-
-// Hooks.on("sightRefresh", (canvasVisibility) => {
-// 	if (canvasVisibility.tokenVision) {
-// 		const swarmedTokens = getSwarmingTokens();
-// 		for (let t of swarmedTokens) {
-// 			const swarm = SWARMS[t.id];
-// 			if (swarm) {
-// 				// Swarm might not exist if just been updated
-// 				// swarm.layer.alpha = t.isVisible ? swarm.document.alpha : 0;
-// 			}
-// 		}
-// 	}
-// });
 
 // Settings:
 Hooks.once("init", () => {
@@ -871,6 +847,11 @@ Hooks.once("init", () => {
 		}
 		const swarm = new SwarmContainer(token, token.document);
 		this.addChild(swarm);
+		// Rendering token config?
+		// if (token.interactionState === 0) {
+		// 	token.mesh = swarm;
+		// 	createSwarmOnToken(token, token.document);
+		// }
 		return swarm;
 	});
 });
