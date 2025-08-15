@@ -110,13 +110,6 @@ function getHealthEstimate(token) {
 	return 1;
 }
 
-/**
- * @type Record<string, Swarm>
- */
-const SWARMS = {};
-// TODO: Remove debug accessor
-window.SWARMS = SWARMS;
-
 class SwarmContainer extends PrimarySpriteMesh {
 	_render(_renderer) {
 		// Base Sprite shouldn't be rendered
@@ -452,15 +445,8 @@ export class Swarm {
 			s.destroy();
 		}
 		this.tick.destroy();
-		// if (this.token._old_TMFXgetSprite) {
-		// 	this.token._TMFXgetSprite = this.token._old_TMFXgetSprite.bind(this.token);
-		// 	delete this.token._old_TMFXgetSprite;
-		// 	// Re set filters on new sprite
-		// 	if (typeof TokenMagic !== "undefined") {
-		// 		TokenMagic._singleLoadFilters(this.token);
-		// 	}
-		// }
 		Hooks.call("destroySwarm", this);
+		delete this.token.swarm;
 	}
 
 	skitter(ms) {
@@ -657,18 +643,10 @@ export class Swarm {
 	}
 }
 
-function deleteSwarmOnToken(token) {
-	const swarm = SWARMS[token.id];
-	if (swarm) {
-		swarm.destroy();
-		delete SWARMS[token.id];
-	}
-}
-
 function createSwarmOnToken(token, document) {
-	deleteSwarmOnToken(token);
+	token.swarm?.destroy();
 	Hooks.call("preCreateSwarm", token, document);
-	SWARMS[token.id] = new Swarm(token, document);
+	new Swarm(token, document);
 }
 
 /**
@@ -693,13 +671,13 @@ const swarmNeedsRefresh = (changes) => {
 
 Hooks.on("preUpdateToken", (document, changes) => {
 	if (swarmNeedsRefresh(changes)) {
-		deleteSwarmOnToken(document);
+		token.swarm?.destroy();
 	}
 });
 
 Hooks.on("updateToken", (document, changes) => {
 	if (document.flags?.[MOD_NAME]?.[SWARM_FLAG]) {
-		const swarm = SWARMS[document.id];
+		const swarm = document.object.swarm;
 		if (!swarm || (swarmNeedsRefresh(changes) && document.object)) {
 			createSwarmOnToken(document.object);
 		} else {
@@ -717,7 +695,7 @@ Hooks.on("updateToken", (document, changes) => {
 });
 
 Hooks.on("refreshToken", (token) => {
-	if (token.document.getFlag(MOD_NAME, SWARM_FLAG) === true && !SWARMS[token.id] && token.mesh) {
+	if (token.document.getFlag(MOD_NAME, SWARM_FLAG) === true && !token.swarm && token.mesh) {
 		createSwarmOnToken(token);
 	}
 });
@@ -726,7 +704,7 @@ Hooks.on("renderTokenConfig", (renderConfig) => {
 	const document = renderConfig.token ?? renderConfig.document;
 	const onDrawToken = (token) => {
 		if (token.document.id === document.id) {
-			deleteSwarmOnToken(token);
+			token.swarm?.destroy();
 			if (token.document.flags?.[MOD_NAME]?.[SWARM_FLAG]) {
 				createSwarmOnToken(token);
 			}
@@ -739,7 +717,7 @@ Hooks.on("renderTokenConfig", (renderConfig) => {
 			Hooks.off("drawToken", onDrawToken);
 			const token = closingDocument.object;
 			if (token) {
-				deleteSwarmOnToken(token);
+				token.swarm?.destroy();
 				if (document.flags?.[MOD_NAME]?.[SWARM_FLAG]) {
 					createSwarmOnToken(token, document);
 				}
@@ -748,12 +726,12 @@ Hooks.on("renderTokenConfig", (renderConfig) => {
 	});
 });
 
-// Delete token
 Hooks.on("deleteToken", (token, options, user_id) => {
-	if (token.id in SWARMS) {
-		SWARMS[token.id].destroy();
-		delete SWARMS[token.id];
-	}
+	token.swarm?.destroy();
+});
+
+Hooks.on("destroyToken", (token) => {
+	token.swarm?.destroy();
 });
 
 Hooks.on("ready", async () => {
@@ -783,12 +761,12 @@ Hooks.on("ready", async () => {
 });
 
 //Only in V10+
-Hooks.on("canvasTearDown", (a, b) => {
-	for (let key of Object.keys(SWARMS)) {
-		SWARMS[key].destroy();
-		delete SWARMS[key];
-	}
-});
+// Hooks.on("canvasTearDown", (a, b) => {
+// 	for (let key of Object.keys(SWARMS)) {
+// 		SWARMS[key].destroy();
+// 		delete SWARMS[key];
+// 	}
+// });
 
 // Settings:
 Hooks.once("init", () => {
@@ -847,10 +825,11 @@ Hooks.once("init", () => {
 		}
 		const swarm = new SwarmContainer(token, token.document);
 		this.addChild(swarm);
-		// Rendering token config?
-		// if (token.interactionState === 0) {
-		// 	token.mesh = swarm;
-		// 	createSwarmOnToken(token, token.document);
+		// if (!(token.mesh instanceof SwarmContainer)) {
+		// 	try {
+		// 		token.mesh = swarm;
+		// 		createSwarmOnToken(token, token.document);
+		// 	} catch (ex) {}
 		// }
 		return swarm;
 	});
