@@ -149,20 +149,6 @@ export class Swarm {
 		this.faded = document.hidden;
 		this.visible = this.faded ? 0 : this.number;
 
-		// if (this.token._TMFXgetSprite && !this.token._old_TMFXgetSprite) {
-		// 	// Override sprite for Token Magic
-		// 	this.token._old_TMFXgetSprite = this.token._TMFXgetSprite;
-		// 	this.token._TMFXgetSprite = function () {
-		// 		return swarm;
-		// 	}.bind(this.token);
-		// 	// Re set filters on new sprite
-		// 	if (typeof TokenMagic !== "undefined") {
-		// 		setTimeout(() => {
-		// 			TokenMagic._singleLoadFilters(this.token);
-		// 		}, 0);
-		// 	}
-		// }
-
 		this.setElevation(document.elevation);
 		this.setSort(this.token.sort ?? 0);
 
@@ -194,7 +180,6 @@ export class Swarm {
 		}
 		this.tick.add(this.anim.bind(this));
 		this.tick.start();
-		this.token.refresh();
 		Hooks.call("createSwarm", this);
 	}
 
@@ -783,9 +768,9 @@ Hooks.on(
 	 * @param {Token} token
 	 * @param {TokenRefreshOptions} changes
 	 */
-	function (token, _changes) {
+	function (token, changes) {
 		if (token.document.getFlag(MOD_NAME, SWARM_FLAG) === true) {
-			if (!token.swarm && token.mesh) {
+			if (!token.swarm || changes.refreshMesh) {
 				createSwarmOnToken(token);
 			}
 		} else if (token.swarm) {
