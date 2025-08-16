@@ -311,6 +311,51 @@ export class Swarm {
 		return fd == 0 ? count : (ms * count) / (fd * 1000);
 	}
 
+	#getScale(sprite) {
+		if (!sprite?.texture?.valid) return;
+
+		if (!sprite?.texture?.valid) return;
+
+		// 1) Texture dimensions (protect against zero)
+		const texW = Math.max(1, sprite.texture.width);
+		const texH = Math.max(1, sprite.texture.height);
+		const smax = Math.max(texW, texH);
+
+		// 2) Set DESIRED_WORLD_SIZE_PX to the canvas grid size.
+		const DESIRED_WORLD_SIZE_PX = game.canvas.grid.size;
+
+		// 3) The base scale that would make the texture's largest side equal DESIRED_WORLD_SIZE_PX.
+		const baseScale = DESIRED_WORLD_SIZE_PX / smax;
+
+		// 4) Token document scale (the only thing we want to *allow* to change sprite size).
+		const docScaleX = this.token?.document?.scaleX ?? 1;
+		const docScaleY = this.token?.document?.scaleY ?? docScaleX;
+
+		// 5) The scale already applied by the container / token mesh that we must undo.
+		//    This is typically the mesh/container scale that Foundry assigns.
+		const containerScaleX = (this.token?.mesh?.scale?.x ?? 1) || 1;
+		const containerScaleY = (this.token?.mesh?.scale?.y ?? containerScaleX) || 1;
+
+		// Defensive guards (avoid division by zero)
+		const safeContainerX = Math.abs(containerScaleX) > 1e-6 ? containerScaleX : 1;
+		const safeContainerY = Math.abs(containerScaleY) > 1e-6 ? containerScaleY : 1;
+
+		// 6) Final per-axis sprite-local scale:
+		//    baseScale   -> makes texture fit desired world size
+		//    * docScale  -> allow token.document.scale to affect final visual size
+		//    / container -> undo already-applied container scaling
+		const finalX = baseScale * (docScaleX / safeContainerX);
+		const finalY = baseScale * (docScaleY / safeContainerY);
+
+		// 7) Optional clamps so extremely tiny/huge textures don't produce absurd values.
+		const MIN = 1e-4;
+		const MAX = 100;
+		return {
+			x: Math.max(MIN, Math.min(MAX, finalX)),
+			y: Math.max(MIN, Math.min(MAX, finalY))
+		};
+	}
+
 	/**
 	 * The main animation callback for this swarm
 	 * @param {Number} t Time fraction of the current fps
@@ -326,28 +371,6 @@ export class Swarm {
 		t = Math.min(t, 2.0); // Cap frame skip to two frames
 		// Milliseconds elapsed, as calculated using the "time" fraction and current fps
 		const ms = t * 1000 * (1.0 / this.tick.FPS);
-
-		const getScale = (sprite) => {
-			if (!sprite.texture.valid) {
-				return;
-			}
-			// Compute the largest texture dimension
-			const smax = Math.max(sprite.texture.width, sprite.texture.height);
-
-			// Normalize the document texture scale by the token's tile dimensions so
-			// changing how many tiles the token spans does not change the sprite scale.
-			// This keeps sprite.scale independent of token.document.width/height.
-			const tilesX = Math.max(1, this.token.document?.width || 1);
-			const tilesY = Math.max(1, this.token.document?.height || tilesX);
-
-			const desiredWorldX = (this.document.texture.scaleX * canvas.grid.size) / tilesX;
-			const desiredWorldY = (this.document.texture.scaleY * canvas.grid.size) / tilesY;
-
-			// Convert desired world pixels to sprite-local scale (texture pixels -> scale)
-			const x = (desiredWorldX / smax) * 4;
-			const y = (desiredWorldY / smax) * 4;
-			return { x, y };
-		};
 
 		let updateSprites = this.tint != this.document.texture.tint;
 
@@ -382,7 +405,7 @@ export class Swarm {
 			if (typeof this.scale === "undefined") {
 				updateSprites = true;
 			} else {
-				const scale = getScale(this.sprites[0]);
+				const scale = this.#getScale(this.sprites[0]);
 				updateSprites = scale && (this.scale.x !== scale.x || this.scale.y !== scale.y);
 			}
 		}
@@ -391,7 +414,7 @@ export class Swarm {
 			const remaining = Math.round(this.maxSprites - this.visible);
 			this.sprites.forEach((sprite, i) => {
 				sprite.alpha = i >= remaining ? 1 : this.faded && game.user.isGM ? 0.2 : 0;
-				const newScale = getScale(sprite);
+				const newScale = this.#getScale(sprite);
 				if (newScale) {
 					this.scale = newScale;
 					sprite.scale.x = this.scale.x;
