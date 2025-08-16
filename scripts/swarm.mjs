@@ -898,12 +898,17 @@ Hooks.once("init", () => {
 		default: 0
 	});
 
-	libWrapper.register(MOD_NAME, "PrimaryCanvasGroup.prototype.addToken", function (wrapped, token) {
-		if (!token.document.getFlag(MOD_NAME, SWARM_FLAG)) {
-			return wrapped(token);
+	libWrapper.register(
+		MOD_NAME,
+		"PrimaryCanvasGroup.prototype.addToken",
+		// Creates a mesh for the token and adds to the canvas groups children.
+		function swarmsAddToken(wrapped, token) {
+			if (!token.document.getFlag(MOD_NAME, SWARM_FLAG)) {
+				return wrapped(token);
+			}
+			const swarm = new SwarmContainer(token, token.document);
+			this.addChild(swarm);
+			return swarm;
 		}
-		const swarm = new SwarmContainer(token, token.document);
-		this.addChild(swarm);
-		return swarm;
-	});
+	);
 });
