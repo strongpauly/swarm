@@ -645,14 +645,51 @@ export class Swarm {
 	}
 
 	move(ms) {
+		// Base desired world speed (pixels per millisecond) *before per-sprite variation.
+		const BASE_WORLD_SPEED_PX_PER_MS = 0.12;
+
 		for (let i = 0; i < this.sprites.length; ++i) {
 			const sprite = this.sprites[i];
 			const destination = this.dest[i];
 			const diff = utils.vSub(destination, { x: sprite.x, y: sprite.y });
 
 			if (diff.x ** 2 + diff.y ** 2 > THETA) {
-				let mv = utils.vNorm(diff);
-				mv = utils.vMult(mv, 0.05 * ms * this.speeds[i] * 4);
+				// Normalised direction in local coordinates
+				const dir = utils.vNorm(diff);
+
+				// Determine the effective parent/world scale that will multiply the sprite's local scale
+				const parent = sprite.parent ?? this.container ?? this.token?.mesh;
+				let parentScaleX = 1;
+				let parentScaleY = 1;
+				if (parent) {
+					try {
+						// Ensure transform is current
+						if (typeof parent.updateTransform === "function") parent.updateTransform();
+					} catch (e) {
+						/* ignore */
+					}
+					const m = parent.worldTransform;
+					if (m) {
+						parentScaleX = Math.hypot(m.a || 0, m.b || 0) || 1;
+						parentScaleY = Math.hypot(m.c || 0, m.d || 0) || parentScaleX;
+					} else {
+						parentScaleX = (parent.scale?.x ?? 1) || 1;
+						parentScaleY = (parent.scale?.y ?? parentScaleX) || 1;
+					}
+				}
+				// Use average scale for converting magnitude
+				const parentScale = (parentScaleX + parentScaleY) / 2 || 1;
+
+				// Desired world speed for this sprite (px / ms)
+				const worldSpeed = BASE_WORLD_SPEED_PX_PER_MS * this.speeds[i];
+
+				// Convert world speed into local units (local units / ms)
+				const localSpeed = worldSpeed / parentScale;
+
+				// Movement vector in local units for this frame
+				let mv = utils.vMult(dir, localSpeed * ms);
+
+				// Don't overshoot
 				if (mv.x ** 2 + mv.y ** 2 > diff.x ** 2 + diff.y ** 2) {
 					mv = diff;
 				}
