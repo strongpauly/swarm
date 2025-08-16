@@ -466,8 +466,10 @@ export class Swarm {
 			s.destroy();
 		}
 		this.tick.destroy();
-		Hooks.call("destroySwarm", this);
 		delete this.token.swarm;
+		// canvas.primary.removeToken(this.token);
+		// this.token.mesh = canvas.primary.addToken(this.token);
+		Hooks.call("destroySwarm", this);
 	}
 
 	skitter(ms) {
@@ -752,15 +754,45 @@ Hooks.on("updateToken", (document, changes) => {
 	}
 });
 
-Hooks.on("refreshToken", (token) => {
-	if (token.document.getFlag(MOD_NAME, SWARM_FLAG) === true) {
-		if (!token.swarm && token.mesh) {
-			createSwarmOnToken(token);
+/**
+ * Options for refreshing token visuals.
+ * @typedef {Object} TokenRefreshOptions
+ * @property {boolean} [refreshBars]
+ * @property {boolean} [refreshBorder]
+ * @property {boolean} [refreshEffects]
+ * @property {boolean} [refreshElevation]
+ * @property {boolean} [refreshMesh]
+ * @property {boolean} [refreshNameplate]
+ * @property {boolean} [refreshPosition]
+ * @property {boolean} [refreshRingVisuals]
+ * @property {boolean} [refreshRotation]
+ * @property {boolean} [refreshRuler]
+ * @property {boolean} [refreshShader]
+ * @property {boolean} [refreshShape]
+ * @property {boolean} [refreshSize]
+ * @property {boolean} [refreshState]
+ * @property {boolean} [refreshTarget]
+ * @property {boolean} [refreshTooltip]
+ * @property {boolean} [refreshTurnMarker]
+ * @property {boolean} [refreshVisibility]
+ */
+
+Hooks.on(
+	"refreshToken",
+	/**
+	 * @param {Token} token
+	 * @param {TokenRefreshOptions} changes
+	 */
+	function (token, _changes) {
+		if (token.document.getFlag(MOD_NAME, SWARM_FLAG) === true) {
+			if (!token.swarm && token.mesh) {
+				createSwarmOnToken(token);
+			}
+		} else if (token.swarm) {
+			token.swarm.destroy();
 		}
-	} else if (token.swarm) {
-		token.swarm.destroy();
 	}
-});
+);
 
 Hooks.on("renderTokenConfig", (renderConfig) => {
 	const document = renderConfig.token ?? renderConfig.document;
