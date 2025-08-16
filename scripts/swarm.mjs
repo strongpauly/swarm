@@ -142,7 +142,7 @@ export class Swarm {
 		this.speeds = [];
 		this.offsets = [];
 		this.waiting = [];
-		this.layer = token.mesh;
+		this.layer = token.mesh; // SwarmContainer
 		token.swarm = this;
 
 		// this.randomRotation = true;
@@ -452,8 +452,6 @@ export class Swarm {
 		}
 		this.tick.destroy();
 		delete this.token.swarm;
-		// canvas.primary.removeToken(this.token);
-		// this.token.mesh = canvas.primary.addToken(this.token);
 		Hooks.call("destroySwarm", this);
 	}
 
@@ -805,7 +803,7 @@ Hooks.on("renderTokenConfig", (renderConfig) => {
 	});
 });
 
-Hooks.on("deleteToken", (token, options, user_id) => {
+Hooks.on("deleteToken", (token) => {
 	token.swarm?.destroy();
 });
 
@@ -838,14 +836,6 @@ Hooks.on("ready", async () => {
 		);
 	}
 });
-
-//Only in V10+
-// Hooks.on("canvasTearDown", (a, b) => {
-// 	for (let key of Object.keys(SWARMS)) {
-// 		SWARMS[key].destroy();
-// 		delete SWARMS[key];
-// 	}
-// });
 
 // Settings:
 Hooks.once("init", () => {
