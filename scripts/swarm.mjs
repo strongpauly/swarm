@@ -110,7 +110,7 @@ function getHealthEstimate(token) {
 	return 1;
 }
 
-class SwarmContainer extends PrimarySpriteMesh {
+class SwarmMesh extends PrimarySpriteMesh {
 	_render(_renderer) {
 		// Base Sprite shouldn't be rendered
 	}
@@ -142,7 +142,20 @@ export class Swarm {
 		this.speeds = [];
 		this.offsets = [];
 		this.waiting = [];
-		this.layer = token.mesh; // SwarmContainer
+
+		if (!token.swarmMesh) {
+			token.swarmMesh = new SwarmMesh(token, token.document);
+			token.originalMesh = token.mesh;
+			token.mesh = token.swarmMesh;
+		} else if (token.mesh !== token.swarmMesh) {
+			token.mesh = token.swarmMesh;
+		}
+
+		this.layer = token.swarmMesh; // SwarmMesh
+
+		if (!canvas.primary.children.includes(token.swarmMesh)) {
+			canvas.primary.addChild(token.swarmMesh);
+		}
 		token.swarm = this;
 
 		// this.randomRotation = true;
@@ -273,7 +286,7 @@ export class Swarm {
 
 			// Add 50% of the speed as variability on each sprites speed
 			this.speeds.push(sf * 0.5 + sf * Math.random() * 0.5);
-			// Add this sprite to the correct layer
+			// Add this sprite to the SwarmMesh
 			this.layer.addChild(sprite);
 		}
 	}
@@ -453,6 +466,17 @@ export class Swarm {
 		this.tick.destroy();
 		delete this.token.swarm;
 		Hooks.call("destroySwarm", this);
+	}
+
+	restoreOriginal() {
+		this.destroy();
+		if (this.token.mesh === this.token.originalMesh) {
+			return;
+		}
+		canvas.primary.removeChild(this.token.mesh);
+		this.token.mesh = this.token.originalMesh;
+		canvas.primary.addChild(this.token.mesh);
+		this.token.refresh();
 	}
 
 	skitter(ms) {
@@ -689,7 +713,7 @@ export class Swarm {
 function createSwarmOnToken(token, document) {
 	token.swarm?.destroy();
 	Hooks.call("preCreateSwarm", token, document);
-	new Swarm(token, document);
+	token.swarm = new Swarm(token, document);
 }
 
 /**
@@ -712,14 +736,8 @@ const swarmNeedsRefresh = (changes) => {
 	return false;
 };
 
-Hooks.on("preUpdateToken", (document, changes) => {
-	if (swarmNeedsRefresh(changes)) {
-		document.object.swarm?.destroy();
-	}
-});
-
 Hooks.on("updateToken", (document, changes) => {
-	if (document.flags?.[MOD_NAME]?.[SWARM_FLAG]) {
+	if (document.getFlag(MOD_NAME, SWARM_FLAG)) {
 		const swarm = document.object.swarm;
 		if (!swarm || (swarmNeedsRefresh(changes) && document.object)) {
 			createSwarmOnToken(document.object);
@@ -734,6 +752,8 @@ Hooks.on("updateToken", (document, changes) => {
 				swarm.setSort(changes.sort);
 			}
 		}
+	} else if (document.object.swarm) {
+		document.object.swarm.restoreOriginal();
 	}
 });
 
@@ -766,42 +786,19 @@ Hooks.on(
 	 * @param {Token} token
 	 * @param {TokenRefreshOptions} changes
 	 */
-	function (token, changes) {
-		if (token.document.getFlag(MOD_NAME, SWARM_FLAG) === true) {
+	function swarmsRefreshToken(token, changes) {
+		if (token.document.getFlag(MOD_NAME, SWARM_FLAG)) {
 			if (!token.swarm || changes.refreshMesh) {
+				if (token.originalMesh && canvas.primary.children.includes(token.originalMesh)) {
+					canvas.primary.removeChild(token.originalMesh);
+				}
 				createSwarmOnToken(token);
 			}
-		} else if (token.swarm) {
-			token.swarm.destroy();
+		} else if (token.swarm && token.originalMesh) {
+			token.swarm.restoreOriginal();
 		}
 	}
 );
-
-Hooks.on("renderTokenConfig", (renderConfig) => {
-	const document = renderConfig.token ?? renderConfig.document;
-	const onDrawToken = (token) => {
-		if (token.document.id === document.id) {
-			token.swarm?.destroy();
-			if (token.document.flags?.[MOD_NAME]?.[SWARM_FLAG]) {
-				createSwarmOnToken(token);
-			}
-		}
-	};
-	Hooks.on("drawToken", onDrawToken);
-	Hooks.once("closeTokenConfig", (closeConfig) => {
-		const closingDocument = closeConfig.token ?? closeConfig.document;
-		if (closingDocument.id === document.id) {
-			Hooks.off("drawToken", onDrawToken);
-			const token = closingDocument.object;
-			if (token) {
-				token.swarm?.destroy();
-				if (document.flags?.[MOD_NAME]?.[SWARM_FLAG]) {
-					createSwarmOnToken(token, document);
-				}
-			}
-		}
-	});
-});
 
 Hooks.on("deleteToken", (token) => {
 	token.swarm?.destroy();
@@ -892,13 +889,15 @@ Hooks.once("init", () => {
 		MOD_NAME,
 		"PrimaryCanvasGroup.prototype.addToken",
 		// Creates a mesh for the token and adds to the canvas groups children.
+		// What is returned will be set as token.mesh
 		function swarmsAddToken(wrapped, token) {
+			token.originalMesh = wrapped(token);
 			if (!token.document.getFlag(MOD_NAME, SWARM_FLAG)) {
-				return wrapped(token);
+				return token.originalMesh;
 			}
-			const swarm = new SwarmContainer(token, token.document);
-			this.addChild(swarm);
-			return swarm;
+			token.swarmMesh = new SwarmMesh(token, token.document);
+			this.addChild(token.swarmMesh);
+			return token.swarmMesh;
 		}
 	);
 });
