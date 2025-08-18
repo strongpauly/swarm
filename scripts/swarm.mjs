@@ -738,7 +738,7 @@ const swarmNeedsRefresh = (changes) => {
 
 Hooks.on("updateToken", (document, changes) => {
 	if (document.getFlag(MOD_NAME, SWARM_FLAG)) {
-		const swarm = document.object.swarm;
+		const swarm = document.object?.swarm;
 		if (!swarm || (swarmNeedsRefresh(changes) && document.object)) {
 			createSwarmOnToken(document.object);
 		} else {
@@ -752,7 +752,7 @@ Hooks.on("updateToken", (document, changes) => {
 				swarm.setSort(changes.sort);
 			}
 		}
-	} else if (document.object.swarm) {
+	} else if (document.object?.swarm) {
 		document.object.swarm.restoreOriginal();
 	}
 });
@@ -800,11 +800,10 @@ Hooks.on(
 	}
 );
 
-Hooks.on("deleteToken", (token) => {
-	token.swarm?.destroy();
-});
-
 Hooks.on("destroyToken", (token) => {
+	if (token.mesh instanceof SwarmMesh) {
+		canvas.primary.removeChild(token.mesh);
+	}
 	token.swarm?.destroy();
 });
 
