@@ -144,7 +144,7 @@ export class Swarm {
 		this.speeds = [];
 		this.offsets = [];
 		this.waiting = [];
-		this.isTile = object instanceof Tile;
+		this.isTile = object instanceof foundry.canvas.placeables.Tile;
 
 		if (!object.swarmMesh) {
 			object.swarmMesh = new SwarmMesh(object, object.document);
