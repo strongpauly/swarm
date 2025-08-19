@@ -875,32 +875,6 @@ Hooks.on("destroyTile", (tile) => {
 	tile.swarm?.destroy();
 });
 
-// Hooks.on("ready", async () => {
-// 	if (game.settings.get(MOD_NAME, SETTING_MIGRATED_TO) < 11.0) {
-// 		ui.notifications.notify(`Migrating Swarms.  Please don't refresh your browser.`);
-// 		const actors = game.actors.filter(
-// 			(a) => a.prototypeToken.getFlag(MOD_NAME, SWARM_FLAG) && a.prototypeToken.alpha === 0
-// 		);
-// 		if (actors.length) {
-// 			await Promise.all(actors.map(async (actor) => await actor.prototypeToken.update({ alpha: 1 })));
-// 		}
-// 		let tokenCount = 0;
-// 		await Promise.all(
-// 			game.scenes.map(async (scene) => {
-// 				const tokens = scene.tokens.filter((token) => token.getFlag(MOD_NAME, SWARM_FLAG) && token.alpha === 0);
-// 				if (tokens.length) {
-// 					await Promise.all(tokens.map(async (token) => await token.update({ alpha: 1 })));
-// 					tokenCount += tokens.length;
-// 				}
-// 			})
-// 		);
-// 		await game.settings.set(MOD_NAME, SETTING_MIGRATED_TO, 11.0);
-// 		ui.notifications.notify(
-// 			`Swarms Migration complete. Updated ${actors.length} actor(s) and ${tokenCount} token(s).`
-// 		);
-// 	}
-// });
-
 // Settings:
 Hooks.once("init", () => {
 	game.settings.register(MOD_NAME, SETTING_HP_REDUCE, {
@@ -942,14 +916,6 @@ Hooks.once("init", () => {
 		config: true,
 		type: Number,
 		default: 5.0
-	});
-
-	game.settings.register(MOD_NAME, SETTING_MIGRATED_TO, {
-		name: "Migrations",
-		scope: "world",
-		config: false,
-		type: Number,
-		default: 0
 	});
 
 	libWrapper.register(
