@@ -183,7 +183,7 @@ function imageSelector(app, flag_name, title) {
 	return grp;
 }
 
-function swarmsRenderTokenConfig(app, html, data) {
+const swarmsRenderConfig = (objectName) => (app, html, data) => {
 	if (!game.user.isGM) return;
 
 	// Create a new form group
@@ -199,7 +199,7 @@ function swarmsRenderTokenConfig(app, html, data) {
 		parent: fieldSet,
 		data_name: SWARM_FLAG,
 		title: "Swarm Enabled",
-		hint: "Whether this token is a swarm."
+		hint: `Whether this ${objectName} is a swarm.`
 	});
 	textBoxConfig({
 		app,
@@ -245,9 +245,8 @@ function swarmsRenderTokenConfig(app, html, data) {
 
 	// Set the apps height correctly
 	app.setPosition();
-}
+};
 
-// Hook into the token config render
-Hooks.on("renderTokenConfig", swarmsRenderTokenConfig);
-// Hook into the token config render
-Hooks.on("renderPrototypeTokenConfig", swarmsRenderTokenConfig);
+Hooks.on("renderTokenConfig", swarmsRenderConfig("token"));
+Hooks.on("renderPrototypeTokenConfig", swarmsRenderConfig("token"));
+Hooks.on("renderTileConfig", swarmsRenderConfig("tile"));

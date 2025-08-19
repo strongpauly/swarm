@@ -131,10 +131,10 @@ class SwarmMesh extends PrimarySpriteMesh {
 }
 
 export class Swarm {
-	constructor(token, document = token.document) {
+	constructor(object, document = object.document) {
 		const number = document.getFlag(MOD_NAME, SWARM_SIZE_FLAG);
 		this.t = 0;
-		this.token = token;
+		this.object = object;
 		this.document = document;
 		this.currentHPPercent = this.calculateHPPercent(); // Calculate current HP percent
 		this.number = this.determineVisibleSprites(this.currentHPPercent, number); // Determine initial number of visible sprites
@@ -144,30 +144,31 @@ export class Swarm {
 		this.speeds = [];
 		this.offsets = [];
 		this.waiting = [];
+		this.isTile = object instanceof Tile;
 
-		if (!token.swarmMesh) {
-			token.swarmMesh = new SwarmMesh(token, token.document);
-			token.swarmMesh.position.set(token.center.x, token.center.y);
-			token.swarmMesh.pivot.set(0.5, 0.5);
-			token.originalMesh = token.mesh;
-			token.mesh = token.swarmMesh;
-		} else if (token.mesh !== token.swarmMesh) {
-			token.mesh = token.swarmMesh;
+		if (!object.swarmMesh) {
+			object.swarmMesh = new SwarmMesh(object, object.document);
+			object.swarmMesh.position.set(object.center.x, object.center.y);
+			object.swarmMesh.pivot.set(0.5, 0.5);
+			object.originalMesh = object.mesh;
+			object.mesh = object.swarmMesh;
+		} else if (object.mesh !== object.swarmMesh) {
+			object.mesh = object.swarmMesh;
 		}
 
-		this.layer = token.swarmMesh; // SwarmMesh
+		this.layer = object.swarmMesh; // SwarmMesh
 
-		if (!canvas.primary.children.includes(token.swarmMesh)) {
-			canvas.primary.addChild(token.swarmMesh);
+		if (!canvas.primary.children.includes(object.swarmMesh)) {
+			canvas.primary.addChild(object.swarmMesh);
 		}
-		token.swarm = this;
+		object.swarm = this;
 
 		// this.randomRotation = true;
 		this.faded = document.hidden;
 		this.visible = this.faded ? 0 : this.number;
 
 		this.setElevation(document.elevation);
-		this.setSort(this.token.sort ?? 0);
+		this.setSort(this.object.sort ?? 0);
 
 		this.created = false;
 
@@ -201,31 +202,31 @@ export class Swarm {
 	}
 
 	/**
-	 * Return token-local (unscaled) dimensions that compensate for the token mesh scale.
-	 * Use these for position/destination math so token.scale only changes visual size.
+	 * Return object-local (unscaled) dimensions that compensate for the object mesh scale.
+	 * Use these for position/destination math so object.scale only changes visual size.
 	 * @returns {{w:number,h:number,scaleX:number,scaleY:number}}
 	 */
 	_getLocalSize() {
-		const mesh = this.token?.mesh;
+		const mesh = this.object?.mesh;
 		const scaleX = mesh?.scale?.x ?? 1;
 		const scaleY = mesh?.scale?.y ?? scaleX;
-		// token.w / scaleX gives the local coordinate width such that after parent-scaling
-		// worldWidth = localWidth * scaleX === this.token.w (old behaviour).
+		// object.w / scaleX gives the local coordinate width such that after parent-scaling
+		// worldWidth = localWidth * scaleX === this.object.w (old behaviour).
 		return {
-			w: this.token.w / scaleX,
-			h: this.token.h / scaleY,
+			w: (this.isTile ? this.object.bounds.width : this.object.w) / scaleX,
+			h: (this.isTile ? this.object.bounds.height : this.object.h) / scaleY,
 			scaleX,
 			scaleY
 		};
 	}
 
 	async createSprites(number) {
-		const use_random_image = this.token.actor.prototypeToken.randomImg;
+		const use_random_image = this.object?.actor?.prototypeToken?.randomImg;
 		const hidden = this.document.hidden;
 
 		let images = [];
 		if (use_random_image) {
-			images = await swarm_socket.executeAsGM("wildcards", this.token.id);
+			images = await swarm_socket.executeAsGM("wildcards", this.object.id);
 		} else {
 			images.push(this.document.texture.src);
 		}
@@ -244,7 +245,7 @@ export class Swarm {
 			const sprite = PIXI.Sprite.from(img);
 			sprite.anchor.set(0.5);
 
-			// Sprites initial position, a random position within this tokens area
+			// Sprites initial position, a random position within this objects area
 			sprite.x = Math.random() * localW - localW / 2;
 			sprite.y = Math.random() * localH - localH / 2;
 			// Hidden initially?
@@ -296,7 +297,7 @@ export class Swarm {
 	}
 
 	calculateHPPercent() {
-		return getHealthEstimate(this.token);
+		return getHealthEstimate(this.object);
 	}
 
 	determineVisibleSprites(hpPercent, maxNumber) {
@@ -328,13 +329,13 @@ export class Swarm {
 		const baseScale = DESIRED_WORLD_SIZE_PX / smax;
 
 		// 4) Token scale (the only thing we want to *allow* to change sprite size).
-		const docScaleX = this.token?.document?.texture?.scaleX ?? 1;
-		const docScaleY = this.token?.document?.texture?.scaleY ?? docScaleX;
+		const docScaleX = this.object?.document?.texture?.scaleX ?? 1;
+		const docScaleY = this.object?.document?.texture?.scaleY ?? docScaleX;
 
-		// 5) The scale already applied by the container / token mesh that we must undo.
+		// 5) The scale already applied by the container / object mesh that we must undo.
 		//    This is typically the mesh/container scale that Foundry assigns.
-		const containerScaleX = (this.token?.mesh?.scale?.x ?? 1) || 1;
-		const containerScaleY = (this.token?.mesh?.scale?.y ?? containerScaleX) || 1;
+		const containerScaleX = (this.object?.mesh?.scale?.x ?? 1) || 1;
+		const containerScaleY = (this.object?.mesh?.scale?.y ?? containerScaleX) || 1;
 
 		// Defensive guards (avoid division by zero)
 		const safeContainerX = Math.abs(containerScaleX) > 1e-6 ? containerScaleX : 1;
@@ -342,7 +343,7 @@ export class Swarm {
 
 		// 6) Final per-axis sprite-local scale:
 		//    baseScale   -> makes texture fit desired world size
-		//    * docScale  -> allow token.document.scale to affect final visual size
+		//    * docScale  -> allow object.document.scale to affect final visual size
 		//    / container -> undo already-applied container scaling
 		const finalX = baseScale * (docScaleX / safeContainerX);
 		const finalY = baseScale * (docScaleY / safeContainerY);
@@ -361,7 +362,7 @@ export class Swarm {
 	 * @param {Number} t Time fraction of the current fps
 	 */
 	anim(t) {
-		if (!this.token.width || !this.token.height) {
+		if (!this.object.texture.valid) {
 			return;
 		}
 		if (!this.created) {
@@ -433,7 +434,7 @@ export class Swarm {
 		this.created = true;
 		// Keep rotation
 		// if (!this.randomRotation){
-		//     this.rotation(this.token.document.rotation);
+		//     this.rotation(this.object.document.rotation);
 		// }
 	}
 
@@ -468,24 +469,25 @@ export class Swarm {
 			s.destroy();
 		}
 		this.tick.destroy();
-		delete this.token.swarm;
+		delete this.object.swarm;
 		Hooks.call("destroySwarm", this);
 	}
 
 	restoreOriginal() {
 		this.destroy();
-		if (this.token.mesh === this.token.originalMesh) {
+		if (this.object.mesh === this.object.originalMesh) {
 			return;
 		}
-		canvas.primary.removeChild(this.token.mesh);
-		this.token.mesh = this.token.originalMesh;
-		canvas.primary.addChild(this.token.mesh);
-		this.token.refresh();
+		canvas.primary.removeChild(this.object.mesh);
+		this.object.mesh = this.object.originalMesh;
+		canvas.primary.addChild(this.object.mesh);
+		this.object.refresh();
 	}
 
 	skitter(ms) {
 		this.stopMoveStop(ms);
 
+		// See if there are pcs that we should stick to.
 		const pcs = canvas.tokens.placeables.filter((t) => t.actor.hasPlayerOwner);
 		if (!pcs.length) return;
 
@@ -494,8 +496,8 @@ export class Swarm {
 
 		for (let i = 0; i < this.sprites.length; ++i) {
 			const s = this.sprites[i];
-			// sprite's global position: convert from center-relative local -> global using token.center
-			const sp = { x: s.x + this.token.center.x, y: s.y + this.token.center.y };
+			// sprite's global position: convert from center-relative local -> global using object.center
+			const sp = { x: s.x + this.object.center.x, y: s.y + this.object.center.y };
 
 			const dists2 = pcp.map((p) => (sp.x - p.x) ** 2 + (sp.y - p.y) ** 2);
 			const smallest = utils.argMin(dists2);
@@ -510,10 +512,10 @@ export class Swarm {
 						sp,
 						utils.vMult(shortest_direction_out_normed, 1.5 * distance_left_out)
 					);
-					// convert back to local coordinates relative to token center
+					// convert back to local coordinates relative to object center
 					this.dest[i] = {
-						x: newDestGlobal.x - this.token.center.x,
-						y: newDestGlobal.y - this.token.center.y
+						x: newDestGlobal.x - this.object.center.x,
+						y: newDestGlobal.y - this.object.center.y
 					};
 				}
 			}
@@ -548,7 +550,7 @@ export class Swarm {
 		const cols = Math.ceil(Math.sqrt(n));
 		const rows = Math.ceil(n / cols);
 
-		const angle = this.token.document.rotation * (Math.PI / 180);
+		const angle = this.object.document.rotation * (Math.PI / 180);
 		const { w: localW, h: localH } = this._getLocalSize();
 		const center = { x: localW / 2, y: localH / 2 };
 
@@ -570,7 +572,7 @@ export class Swarm {
 			const x = rowOffsetX + (indexInRow + 0.5) * cellW;
 			const y = (row + 0.5) * cellH;
 
-			// Rotate around the token center:
+			// Rotate around the object center:
 			// translate to center, rotate, translate back
 			const tx = x - center.x;
 			const ty = y - center.y;
@@ -671,7 +673,7 @@ export class Swarm {
 				const dir = utils.vNorm(diff);
 
 				// Determine the effective parent/world scale that will multiply the sprite's local scale
-				const parent = sprite.parent ?? this.container ?? this.token?.mesh;
+				const parent = sprite.parent ?? this.container ?? this.object?.mesh;
 				let parentScaleX = 1;
 				let parentScaleY = 1;
 				if (parent) {
@@ -714,10 +716,10 @@ export class Swarm {
 	}
 }
 
-function createSwarmOnToken(token, document) {
-	token.swarm?.destroy();
-	Hooks.call("preCreateSwarm", token, document);
-	token.swarm = new Swarm(token, document);
+function createSwarm(object, document) {
+	object.swarm?.destroy();
+	Hooks.call("preCreateSwarm", object, document);
+	object.swarm = new Swarm(object, document);
 }
 
 /**
@@ -744,7 +746,7 @@ Hooks.on("updateToken", (document, changes) => {
 	if (document.getFlag(MOD_NAME, SWARM_FLAG)) {
 		const swarm = document.object?.swarm;
 		if (!swarm || (swarmNeedsRefresh(changes) && document.object)) {
-			createSwarmOnToken(document.object);
+			createSwarm(document.object);
 		} else {
 			if (changes.hidden != undefined) {
 				swarm.hide(changes.hidden);
@@ -796,7 +798,7 @@ Hooks.on(
 				if (token.originalMesh && canvas.primary.children.includes(token.originalMesh)) {
 					canvas.primary.removeChild(token.originalMesh);
 				}
-				createSwarmOnToken(token);
+				createSwarm(token);
 			}
 		} else if (token.swarm && token.originalMesh) {
 			token.swarm.restoreOriginal();
@@ -811,31 +813,93 @@ Hooks.on("destroyToken", (token) => {
 	token.swarm?.destroy();
 });
 
-Hooks.on("ready", async () => {
-	if (game.settings.get(MOD_NAME, SETTING_MIGRATED_TO) < 11.0) {
-		ui.notifications.notify(`Migrating Swarms.  Please don't refresh your browser.`);
-		const actors = game.actors.filter(
-			(a) => a.prototypeToken.getFlag(MOD_NAME, SWARM_FLAG) && a.prototypeToken.alpha === 0
-		);
-		if (actors.length) {
-			await Promise.all(actors.map(async (actor) => await actor.prototypeToken.update({ alpha: 1 })));
+Hooks.on("updateTile", (document, changes) => {
+	if (document.getFlag(MOD_NAME, SWARM_FLAG)) {
+		const swarm = document.object?.swarm;
+		if (!swarm || (swarmNeedsRefresh(changes) && document.object)) {
+			createSwarm(document.object);
+		} else {
+			if (changes.hidden != undefined) {
+				swarm.hide(changes.hidden);
+			}
+			if (changes.elevation !== undefined) {
+				swarm.setElevation(changes.elevation);
+			}
+			if (changes.sort !== undefined) {
+				swarm.setSort(changes.sort);
+			}
 		}
-		let tokenCount = 0;
-		await Promise.all(
-			game.scenes.map(async (scene) => {
-				const tokens = scene.tokens.filter((token) => token.getFlag(MOD_NAME, SWARM_FLAG) && token.alpha === 0);
-				if (tokens.length) {
-					await Promise.all(tokens.map(async (token) => await token.update({ alpha: 1 })));
-					tokenCount += tokens.length;
-				}
-			})
-		);
-		await game.settings.set(MOD_NAME, SETTING_MIGRATED_TO, 11.0);
-		ui.notifications.notify(
-			`Swarms Migration complete. Updated ${actors.length} actor(s) and ${tokenCount} token(s).`
-		);
+	} else if (document.object?.swarm) {
+		document.object.swarm.restoreOriginal();
 	}
 });
+
+/**
+ * Options for refreshing tile visuals.
+ * @typedef {Object} TileRefreshOptions
+ * @property {boolean} [refreshElevation]
+ * @property {boolean} [refreshFrame]
+ * @property {boolean} [refreshMesh]
+ * @property {boolean} [refreshPerception]
+ * @property {boolean} [refreshPosition]
+ * @property {boolean} [refreshRotation]
+ * @property {boolean} [refreshSize]
+ * @property {boolean} [refreshState]
+ * @property {boolean} [refreshVideo]
+ */
+
+Hooks.on(
+	"refreshTile",
+	/**
+	 * @param {Tile} token
+	 * @param {TileRefreshOptions} changes
+	 */
+	function swarmsRefreshTile(tile, changes) {
+		if (tile.document.getFlag(MOD_NAME, SWARM_FLAG)) {
+			if (!tile.swarm || changes.refreshMesh) {
+				if (tile.originalMesh && canvas.primary.children.includes(tile.originalMesh)) {
+					canvas.primary.removeChild(tile.originalMesh);
+				}
+				createSwarm(tile);
+			}
+		} else if (tile.swarm && tile.originalMesh) {
+			tile.swarm.restoreOriginal();
+		}
+	}
+);
+
+Hooks.on("destroyTile", (tile) => {
+	if (tile.mesh instanceof SwarmMesh) {
+		canvas.primary.removeChild(tile.mesh);
+	}
+	tile.swarm?.destroy();
+});
+
+// Hooks.on("ready", async () => {
+// 	if (game.settings.get(MOD_NAME, SETTING_MIGRATED_TO) < 11.0) {
+// 		ui.notifications.notify(`Migrating Swarms.  Please don't refresh your browser.`);
+// 		const actors = game.actors.filter(
+// 			(a) => a.prototypeToken.getFlag(MOD_NAME, SWARM_FLAG) && a.prototypeToken.alpha === 0
+// 		);
+// 		if (actors.length) {
+// 			await Promise.all(actors.map(async (actor) => await actor.prototypeToken.update({ alpha: 1 })));
+// 		}
+// 		let tokenCount = 0;
+// 		await Promise.all(
+// 			game.scenes.map(async (scene) => {
+// 				const tokens = scene.tokens.filter((token) => token.getFlag(MOD_NAME, SWARM_FLAG) && token.alpha === 0);
+// 				if (tokens.length) {
+// 					await Promise.all(tokens.map(async (token) => await token.update({ alpha: 1 })));
+// 					tokenCount += tokens.length;
+// 				}
+// 			})
+// 		);
+// 		await game.settings.set(MOD_NAME, SETTING_MIGRATED_TO, 11.0);
+// 		ui.notifications.notify(
+// 			`Swarms Migration complete. Updated ${actors.length} actor(s) and ${tokenCount} token(s).`
+// 		);
+// 	}
+// });
 
 // Settings:
 Hooks.once("init", () => {
@@ -901,6 +965,22 @@ Hooks.once("init", () => {
 			token.swarmMesh = new SwarmMesh(token, token.document);
 			this.addChild(token.swarmMesh);
 			return token.swarmMesh;
+		}
+	);
+
+	libWrapper.register(
+		MOD_NAME,
+		"PrimaryCanvasGroup.prototype.addTile",
+		// Creates a mesh for the tile and adds to the canvas groups children.
+		// What is returned will be set as tile.mesh
+		function swarmsAddTile(wrapped, tile) {
+			tile.originalMesh = wrapped(tile);
+			if (!tile.document.getFlag(MOD_NAME, SWARM_FLAG)) {
+				return tile.originalMesh;
+			}
+			tile.swarmMesh = new SwarmMesh(tile, tile.document);
+			this.addChild(tile.swarmMesh);
+			return tile.swarmMesh;
 		}
 	);
 });
