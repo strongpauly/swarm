@@ -115,6 +115,8 @@ class SwarmMesh extends PrimarySpriteMesh {
 		// Base Sprite shouldn't be rendered
 	}
 
+	// Override rotation and angle
+	// Swarms can't face a direction (except formSquare, but this is handled by the Swarm)
 	get rotation() {
 		return 0;
 	}
