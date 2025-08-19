@@ -145,6 +145,8 @@ export class Swarm {
 
 		if (!token.swarmMesh) {
 			token.swarmMesh = new SwarmMesh(token, token.document);
+			token.swarmMesh.position.set(token.center.x, token.center.y);
+			token.swarmMesh.pivot.set(0.5, 0.5);
 			token.originalMesh = token.mesh;
 			token.mesh = token.swarmMesh;
 		} else if (token.mesh !== token.swarmMesh) {
