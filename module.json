@@ -17,7 +17,7 @@
 	],
 	"esmodules": ["scripts/swarm.mjs", "scripts/ui.mjs"],
 	"url": "#{URL}#",
-	"manifest": "#{MANIFEST}#",
+	"manifest": "https://github.com/strongpauly/swarm/releases/download/#{VERSION}#/module.json",
 	"download": "#{DOWNLOAD}#",
 	"changelog": "https://github.com/strongpauly/swarm/releases/tag/#{VERSION}#",
 	"languages": [
