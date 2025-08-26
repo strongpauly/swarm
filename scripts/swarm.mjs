@@ -329,8 +329,12 @@ export class Swarm {
 		const baseScale = DESIRED_WORLD_SIZE_PX / smax;
 
 		// 4) Token scale (the only thing we want to *allow* to change sprite size).
-		const docScaleX = this.object?.document?.texture?.scaleX ?? 1;
-		const docScaleY = this.object?.document?.texture?.scaleY ?? docScaleX;
+		let docScaleX = this.object?.document?.texture?.scaleX ?? 1;
+		let docScaleY = this.object?.document?.texture?.scaleY ?? docScaleX;
+
+		// 4.5) Square docScale to allow for greater range of values.
+		docScaleX = docScaleX * docScaleX;
+		docScaleY = docScaleY * docScaleY;
 
 		// 5) The scale already applied by the container / object mesh that we must undo.
 		//    This is typically the mesh/container scale that Foundry assigns.
@@ -348,7 +352,7 @@ export class Swarm {
 		const finalX = baseScale * (docScaleX / safeContainerX);
 		const finalY = baseScale * (docScaleY / safeContainerY);
 
-		// 7) Optional clamps so extremely tiny/huge textures don't produce absurd values.
+		// 7) Clamps so extremely tiny/huge textures don't produce absurd values.
 		const MIN = 1e-4;
 		const MAX = 100;
 		return {
