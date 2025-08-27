@@ -12,6 +12,9 @@ import {
 	ANIM_TYPE_CIRCULAR,
 	ANIM_TYPE_FLAG,
 	ANIM_TYPES,
+	DEFAULT_ANIMATION,
+	DEFAULT_SWARM_SIZE,
+	DEFAULT_SWARM_SPEED,
 	MOD_NAME,
 	SWARM_FLAG,
 	SWARM_SIZE_FLAG,
@@ -206,8 +209,8 @@ const swarmsRenderConfig = (objectName) => (app, html, data) => {
 		parent: fieldSet,
 		flag_name: SWARM_SIZE_FLAG,
 		title: "Count",
-		placeholder: 20,
-		default_value: 20,
+		placeholder: DEFAULT_SWARM_SIZE,
+		default_value: DEFAULT_SWARM_SIZE,
 		step: 1,
 		hint: "Number of sprites in the swarm."
 	});
@@ -216,8 +219,8 @@ const swarmsRenderConfig = (objectName) => (app, html, data) => {
 		parent: fieldSet,
 		flag_name: SWARM_SPEED_FLAG,
 		title: "Speed",
-		placeholder: 1.0,
-		default_value: 1.0,
+		placeholder: DEFAULT_SWARM_SPEED,
+		default_value: DEFAULT_SWARM_SPEED,
 		step: 0.1,
 		hint: "Animation speed for the swarm."
 	});
@@ -226,7 +229,7 @@ const swarmsRenderConfig = (objectName) => (app, html, data) => {
 		parent: fieldSet,
 		flag_name: ANIM_TYPE_FLAG,
 		values: ANIM_TYPES,
-		default_value: ANIM_TYPE_CIRCULAR,
+		default_value: DEFAULT_ANIMATION,
 		hint: "Animation style for the swarm."
 	});
 
