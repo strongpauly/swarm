@@ -29,3 +29,6 @@ export const SETTING_MIGRATED_TO = "migratedTo";
 export const THETA = 0.01;
 export const SIGMA = 5;
 export const GAMMA = 1000;
+export const DEFAULT_SWARM_SIZE = 20;
+export const DEFAULT_SWARM_SPEED = 1;
+export const DEFAULT_ANIMATION = ANIM_TYPE_CIRCULAR;

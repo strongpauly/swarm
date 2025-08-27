@@ -19,6 +19,9 @@ import {
 	ANIM_TYPE_SKITTER,
 	ANIM_TYPE_SPIRAL,
 	ANIM_TYPE_STOPNMOVE,
+	DEFAULT_ANIMATION,
+	DEFAULT_SWARM_SIZE,
+	DEFAULT_SWARM_SPEED,
 	GAMMA,
 	MOD_NAME,
 	SETTING_FADE_TIME,
@@ -132,7 +135,7 @@ class SwarmMesh extends PrimarySpriteMesh {
 
 export class Swarm {
 	constructor(object, document = object.document) {
-		const number = document.getFlag(MOD_NAME, SWARM_SIZE_FLAG);
+		const number = document.getFlag(MOD_NAME, SWARM_SIZE_FLAG) ?? DEFAULT_SWARM_SIZE;
 		this.t = 0;
 		this.object = object;
 		this.document = document;
@@ -147,13 +150,20 @@ export class Swarm {
 		this.isTile = object instanceof foundry.canvas.placeables.Tile;
 
 		if (!object.swarmMesh) {
-			object.swarmMesh = new SwarmMesh(object, object.document);
+			object.swarmMesh = new SwarmMesh(object, document);
 			object.swarmMesh.position.set(object.center.x, object.center.y);
 			object.swarmMesh.pivot.set(0.5, 0.5);
 			object.originalMesh = object.mesh;
 			object.mesh = object.swarmMesh;
 		} else if (object.mesh !== object.swarmMesh) {
+			if (!object.originalMesh) {
+				object.originalMesh = object.mesh;
+			}
 			object.mesh = object.swarmMesh;
+		}
+
+		if (canvas.primary.children.includes(object.originalMesh)) {
+			canvas.primary.removeChild(object.originalMesh);
 		}
 
 		this.layer = object.swarmMesh; // SwarmMesh
@@ -173,7 +183,7 @@ export class Swarm {
 		this.created = false;
 
 		this.tick = new PIXI.Ticker();
-		const anim = document.getFlag(MOD_NAME, ANIM_TYPE_FLAG);
+		const anim = document.getFlag(MOD_NAME, ANIM_TYPE_FLAG) ?? DEFAULT_ANIMATION;
 		this.setDestinations = this.circular;
 		switch (anim) {
 			case ANIM_TYPE_CIRCULAR:
@@ -231,7 +241,7 @@ export class Swarm {
 			images.push(this.document.texture.src);
 		}
 
-		const anim = this.document.getFlag(MOD_NAME, ANIM_TYPE_FLAG);
+		const anim = this.document.getFlag(MOD_NAME, ANIM_TYPE_FLAG) ?? DEFAULT_ANIMATION;
 
 		const { w: localW, h: localH } = this._getLocalSize();
 
@@ -271,7 +281,7 @@ export class Swarm {
 			// Set the initial destination to its initial position
 			this.dest.push({ x: sprite.x, y: sprite.y });
 			this.sprites.push(sprite);
-			let sf = this.document.getFlag(MOD_NAME, SWARM_SPEED_FLAG);
+			let sf = this.document.getFlag(MOD_NAME, SWARM_SPEED_FLAG) ?? DEFAULT_SWARM_SPEED;
 			if (sf === undefined) sf = 1;
 
 			switch (anim) {
@@ -720,10 +730,10 @@ export class Swarm {
 	}
 }
 
-function createSwarm(object, document) {
+function createSwarm(object) {
 	object.swarm?.destroy();
-	Hooks.call("preCreateSwarm", object, document);
-	object.swarm = new Swarm(object, document);
+	Hooks.call("preCreateSwarm", object);
+	object.swarm = new Swarm(object);
 }
 
 /**
@@ -799,9 +809,6 @@ Hooks.on(
 	function swarmsRefreshToken(token, changes) {
 		if (token.document.getFlag(MOD_NAME, SWARM_FLAG)) {
 			if (!token.swarm || changes.refreshMesh) {
-				if (token.originalMesh && canvas.primary.children.includes(token.originalMesh)) {
-					canvas.primary.removeChild(token.originalMesh);
-				}
 				createSwarm(token);
 			}
 		} else if (token.swarm && token.originalMesh) {
@@ -861,9 +868,6 @@ Hooks.on(
 	function swarmsRefreshTile(tile, changes) {
 		if (tile.document.getFlag(MOD_NAME, SWARM_FLAG)) {
 			if (!tile.swarm || changes.refreshMesh) {
-				if (tile.originalMesh && canvas.primary.children.includes(tile.originalMesh)) {
-					canvas.primary.removeChild(tile.originalMesh);
-				}
 				createSwarm(tile);
 			}
 		} else if (tile.swarm && tile.originalMesh) {
