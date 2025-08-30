@@ -28,7 +28,6 @@ import {
 	SETTING_HP_REDUCE,
 	SETTING_HP_REDUCE_ATTRIBUTE_MAX,
 	SETTING_HP_REDUCE_ATTRIBUTE_VALUE,
-	SETTING_MIGRATED_TO,
 	SETTING_STOP_TIME,
 	SIGMA,
 	SWARM_FLAG,
@@ -139,6 +138,7 @@ export class Swarm {
 		this.t = 0;
 		this.object = object;
 		this.document = document;
+		this.useRandomImage = this.object?.actor?.prototypeToken?.randomImg;
 		this.currentHPPercent = this.calculateHPPercent(); // Calculate current HP percent
 		this.number = this.determineVisibleSprites(this.currentHPPercent, number); // Determine initial number of visible sprites
 		this.maxSprites = number; // Store the maximum number of sprites
@@ -231,11 +231,10 @@ export class Swarm {
 	}
 
 	async createSprites(number) {
-		const use_random_image = this.object?.actor?.prototypeToken?.randomImg;
 		const hidden = this.document.hidden;
 
 		let images = [];
-		if (use_random_image) {
+		if (this.useRandomImage) {
 			images = await swarm_socket.executeAsGM("wildcards", this.object.id);
 		} else {
 			images.push(this.document.texture.src);
@@ -425,15 +424,21 @@ export class Swarm {
 			}
 		}
 
-		if (updateSprites) {
+		if (updateSprites && this.sprites.length > 0) {
 			const remaining = Math.round(this.maxSprites - this.visible);
+
+			this.scale = this.#getScale(this.sprites[0]);
+			let getScale = () => this.scale;
+			if (this.useRandomImage) {
+				// Calculate scale for each sprite
+				getScale = (sprite) => this.#getScale(sprite);
+			}
+
 			this.sprites.forEach((sprite, i) => {
 				sprite.alpha = i >= remaining ? 1 : this.faded && game.user.isGM ? 0.2 : 0;
-				const newScale = this.#getScale(sprite);
-				if (newScale) {
-					this.scale = newScale;
-					sprite.scale.x = this.scale.x;
-					sprite.scale.y = this.scale.y;
+				const scale = getScale(sprite);
+				if (scale) {
+					sprite.scale.set(scale.x, scale.y);
 				}
 				if (this.document.texture.tint) {
 					this.tint = sprite.tint = this.document.texture.tint;
@@ -677,6 +682,29 @@ export class Swarm {
 		// Base desired world speed (pixels per millisecond) *before per-sprite variation.
 		const BASE_WORLD_SPEED_PX_PER_MS = 0.12;
 
+		// Determine the effective parent/world scale that will multiply the sprite's local scale
+		const parent = this.object?.swarmMesh;
+		let parentScaleX = 1;
+		let parentScaleY = 1;
+		if (parent) {
+			try {
+				// Ensure transform is current
+				if (typeof parent.updateTransform === "function") parent.updateTransform();
+			} catch (e) {
+				/* ignore */
+			}
+			const m = parent.worldTransform;
+			if (m) {
+				parentScaleX = Math.hypot(m.a || 0, m.b || 0) || 1;
+				parentScaleY = Math.hypot(m.c || 0, m.d || 0) || parentScaleX;
+			} else {
+				parentScaleX = (parent.scale?.x ?? 1) || 1;
+				parentScaleY = (parent.scale?.y ?? parentScaleX) || 1;
+			}
+		}
+		// Use average scale for converting magnitude
+		const parentScale = (parentScaleX + parentScaleY) / 2 || 1;
+
 		for (let i = 0; i < this.sprites.length; ++i) {
 			const sprite = this.sprites[i];
 			const destination = this.dest[i];
@@ -685,29 +713,6 @@ export class Swarm {
 			if (diff.x ** 2 + diff.y ** 2 > THETA) {
 				// Normalised direction in local coordinates
 				const dir = utils.vNorm(diff);
-
-				// Determine the effective parent/world scale that will multiply the sprite's local scale
-				const parent = sprite.parent ?? this.container ?? this.object?.mesh;
-				let parentScaleX = 1;
-				let parentScaleY = 1;
-				if (parent) {
-					try {
-						// Ensure transform is current
-						if (typeof parent.updateTransform === "function") parent.updateTransform();
-					} catch (e) {
-						/* ignore */
-					}
-					const m = parent.worldTransform;
-					if (m) {
-						parentScaleX = Math.hypot(m.a || 0, m.b || 0) || 1;
-						parentScaleY = Math.hypot(m.c || 0, m.d || 0) || parentScaleX;
-					} else {
-						parentScaleX = (parent.scale?.x ?? 1) || 1;
-						parentScaleY = (parent.scale?.y ?? parentScaleX) || 1;
-					}
-				}
-				// Use average scale for converting magnitude
-				const parentScale = (parentScaleX + parentScaleY) / 2 || 1;
 
 				// Desired world speed for this sprite (px / ms)
 				const worldSpeed = BASE_WORLD_SPEED_PX_PER_MS * this.speeds[i];
