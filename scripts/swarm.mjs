@@ -710,7 +710,8 @@ export class Swarm {
 			const destination = this.dest[i];
 			const diff = utils.vSub(destination, { x: sprite.x, y: sprite.y });
 
-			if (diff.x ** 2 + diff.y ** 2 > THETA) {
+			const diffLenSq = diff.x ** 2 + diff.y ** 2;
+			if (diffLenSq > THETA) {
 				// Normalised direction in local coordinates
 				const dir = utils.vNorm(diff);
 
@@ -724,7 +725,8 @@ export class Swarm {
 				let mv = utils.vMult(dir, localSpeed * ms);
 
 				// Don't overshoot
-				if (mv.x ** 2 + mv.y ** 2 > diff.x ** 2 + diff.y ** 2) {
+				const mvLenSq = mv.x ** 2 + mv.y ** 2;
+				if (mvLenSq > diffLenSq) {
 					mv = diff;
 				}
 				sprite.x += mv.x;
