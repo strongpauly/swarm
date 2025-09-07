@@ -37,10 +37,6 @@ import {
 } from "./constants.mjs";
 import * as utils from "./utils.mjs";
 
-function Lang(k) {
-	return game.i18n.localize("SWARM." + k);
-}
-
 let swarm_socket;
 Hooks.once("socketlib.ready", () => {
 	// socketlib is activated, lets register our function moveAsGM
@@ -281,7 +277,6 @@ export class Swarm {
 			this.dest.push({ x: sprite.x, y: sprite.y });
 			this.sprites.push(sprite);
 			let sf = this.document.getFlag(MOD_NAME, SWARM_SPEED_FLAG) ?? DEFAULT_SWARM_SPEED;
-			if (sf === undefined) sf = 1;
 
 			switch (anim) {
 				case ANIM_TYPE_RAND_SQUARE:
@@ -710,7 +705,8 @@ export class Swarm {
 			const destination = this.dest[i];
 			const diff = utils.vSub(destination, { x: sprite.x, y: sprite.y });
 
-			if (diff.x ** 2 + diff.y ** 2 > THETA) {
+			const diffLenSq = diff.x ** 2 + diff.y ** 2;
+			if (diffLenSq > THETA) {
 				// Normalised direction in local coordinates
 				const dir = utils.vNorm(diff);
 
@@ -724,7 +720,8 @@ export class Swarm {
 				let mv = utils.vMult(dir, localSpeed * ms);
 
 				// Don't overshoot
-				if (mv.x ** 2 + mv.y ** 2 > diff.x ** 2 + diff.y ** 2) {
+				const mvLenSq = mv.x ** 2 + mv.y ** 2;
+				if (mvLenSq > diffLenSq) {
 					mv = diff;
 				}
 				sprite.x += mv.x;
@@ -822,14 +819,20 @@ Hooks.on(
 	}
 );
 
-Hooks.on("destroyToken", (token) => {
-	if (token.mesh instanceof SwarmMesh) {
-		canvas.primary.removeChild(token.mesh);
+Hooks.on(
+	"destroyToken",
+	/**
+	 * @param {Token} token
+	 */
+	function swarmsDestroyToken(token) {
+		if (token.mesh instanceof SwarmMesh) {
+			canvas.primary.removeChild(token.mesh);
+		}
+		token.swarm?.destroy();
 	}
-	token.swarm?.destroy();
-});
+);
 
-Hooks.on("updateTile", (document, changes) => {
+Hooks.on("updateTile", function updateTile(document, changes) {
 	if (document.getFlag(MOD_NAME, SWARM_FLAG)) {
 		const swarm = document.object?.swarm;
 		if (!swarm || (swarmNeedsRefresh(changes) && document.object)) {
@@ -881,7 +884,7 @@ Hooks.on(
 	}
 );
 
-Hooks.on("destroyTile", (tile) => {
+Hooks.on("destroyTile", function swarmsDestroyTile(tile) {
 	if (tile.mesh instanceof SwarmMesh) {
 		canvas.primary.removeChild(tile.mesh);
 	}
