@@ -201,6 +201,7 @@ const swarmsRenderConfig = (objectName) => (app, html, data) => {
 		app,
 		parent: fieldSet,
 		data_name: SWARM_FLAG,
+		default_value: false,
 		title: "Swarm Enabled",
 		hint: `Whether this ${objectName} is a swarm.`
 	});

@@ -162,7 +162,7 @@ export class Swarm {
 			canvas.primary.removeChild(object.originalMesh);
 		}
 
-		this.layer = object.swarmMesh; // SwarmMesh
+		this.layer = object.swarmMesh;
 
 		if (!canvas.primary.children.includes(object.swarmMesh)) {
 			canvas.primary.addChild(object.swarmMesh);
@@ -441,7 +441,7 @@ export class Swarm {
 			});
 		}
 
-		// Calling the animation specific method, set_destination
+		// Calling the animation specific method, setDestinations
 		this.setDestinations(ms);
 		// Calling the generic move method
 		this.move(ms);
@@ -450,6 +450,53 @@ export class Swarm {
 		// if (!this.randomRotation){
 		//     this.rotation(this.object.document.rotation);
 		// }
+		this.showDebug(ms);
+	}
+
+	showDebug(ms) {
+		if (!CONFIG.debug.canvas.primary.swarms) {
+			return;
+		}
+		if (!this.debug) {
+			this.debug = {};
+		}
+		if (!this.debug.tl) {
+			this.debug.tl = new PIXI.Text("TL", {
+				fontSize: 72,
+				align: "center",
+				x: 0,
+				y: 0
+			});
+			this.layer.addChild(this.debug.tl);
+		}
+		if (!this.debug.br) {
+			const { w, h } = this._getLocalSize();
+			this.debug.br = new PIXI.Text("", {
+				fontSize: 72,
+				align: "center",
+				x: w,
+				y: h
+			});
+			this.layer.addChild(this.debug.br);
+		}
+		if (!this.debug.destinations) {
+			this.debug.destinations = this.dest.map(({ x, y }, i) => {
+				const text = new PIXI.Text(`d${i}`, {
+					fontSize: 72,
+					align: "center",
+					x,
+					y
+				});
+				this.layer.addChild(text);
+				return text;
+			});
+		} else {
+			this.debug.destinations.forEach((d, i) => {
+				d.x = this.dest[i].x;
+				d.y = this.dest[i].y;
+			});
+		}
+		this.debug.br.text = `Speed:${this.speeds[0].toFixed(3)}, ${ms.toFixed(3)}ms`;
 	}
 
 	/**
@@ -965,4 +1012,6 @@ Hooks.once("init", () => {
 			return tile.swarmMesh;
 		}
 	);
+
+	CONFIG.debug.canvas.primary.swarms = false;
 });
