@@ -468,9 +468,12 @@ export class Swarm {
 				y: 0
 			});
 			this.layer.addChild(this.debug.tl);
+		} else {
+			this.debug.tl.x = 0;
+			this.debug.tl.y = 0;
 		}
+		const { w, h } = this._getLocalSize();
 		if (!this.debug.br) {
-			const { w, h } = this._getLocalSize();
 			this.debug.br = new PIXI.Text("", {
 				fontSize: 72,
 				align: "center",
@@ -478,6 +481,9 @@ export class Swarm {
 				y: h
 			});
 			this.layer.addChild(this.debug.br);
+		} else {
+			this.debug.br.x = w;
+			this.debug.br.y = h;
 		}
 		if (!this.debug.destinations) {
 			this.debug.destinations = this.dest.map(({ x, y }, i) => {

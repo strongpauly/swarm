@@ -12,7 +12,7 @@
  */
 
 /**
- * @typedef {Object} Vec2
+ * @typedef {Object} Vector
  * @property {Number} x
  * @property {Number} y
  */
@@ -30,8 +30,8 @@ export function prepend(value, array) {
 
 /**
  * Negate a vector
- * @param {Vec2} p
- * @returns {Vec2}
+ * @param {Vector} p
+ * @returns {Vector}
  */
 export function vNeg(p) {
 	// Return -1*v
@@ -39,9 +39,9 @@ export function vNeg(p) {
 }
 /**
  * Add two vectors
- * @param {Vec2} p1
- * @param {Vec2} p2
- * @returns {Vec2}
+ * @param {Vector} p1
+ * @param {Vector} p2
+ * @returns {Vector}
  */
 export function vAdd(p1, p2) {
 	// Return the sum, p1 + p2
@@ -49,9 +49,9 @@ export function vAdd(p1, p2) {
 }
 /**
  * Subtract one vector from another
- * @param {Vec2} p1
- * @param {Vec2} p2
- * @returns {Vec2}
+ * @param {Vector} p1
+ * @param {Vector} p2
+ * @returns {Vector}
  */
 export function vSub(p1, p2) {
 	// Return the difference, p1-p2
@@ -59,9 +59,9 @@ export function vSub(p1, p2) {
 }
 /**
  * Multiply a vector, p, with a number, v
- * @param {Vec2} p
+ * @param {Vector} p
  * @param {Number} v
- * @returns {Vec2}
+ * @returns {Vector}
  */
 export function vMult(p, v) {
 	// Multiply vector p with value v
@@ -69,8 +69,8 @@ export function vMult(p, v) {
 }
 /**
  * The dot product of two vectors.
- * @param {Vec2} p1
- * @param {Vec2} p2
+ * @param {Vector} p1
+ * @param {Vector} p2
  * @returns {Number}
  */
 export function vDot(p1, p2) {
@@ -79,7 +79,7 @@ export function vDot(p1, p2) {
 }
 /**
  * The length of a vector, p
- * @param {Vec2} p
+ * @param {Vector} p
  * @returns {Number}
  */
 export function vLen(p) {
@@ -88,8 +88,8 @@ export function vLen(p) {
 }
 /**
  * Returns the normalized vector of p
- * @param {Vec2} p
- * @returns {Vec2}
+ * @param {Vector} p
+ * @returns {Vector}
  */
 export function vNorm(p) {
 	// Normalize the vector p, p/||p||
@@ -97,7 +97,7 @@ export function vNorm(p) {
 }
 /**
  * The angle matching the vector p
- * @param {Vec2} p
+ * @param {Vector} p
  * @returns {Number}
  */
 export function vAngle(p) {
@@ -106,14 +106,14 @@ export function vAngle(p) {
 }
 /**
  * The angle matching the vector p
- * @param {Vec2} p
+ * @param {Vector} p
  * @returns {Number} The foundry compatible 'rotation angle' to point along the vector p
  */
 export function vRad(p) {
 	return Math.atan2(p.y, p.x);
 }
 
-export class Vec2 {
+export class Vector {
 	constructor(x, y) {
 		this.x = x != null ? x : 0;
 		this.y = y != null ? y : 0;
@@ -121,11 +121,6 @@ export class Vec2 {
 	set(x, y) {
 		this.x = x;
 		this.y = y;
-		return this;
-	}
-	setVec2(v) {
-		this.x = v.x;
-		this.y = v.y;
 		return this;
 	}
 	equals(v, tolerance) {
@@ -140,7 +135,7 @@ export class Vec2 {
 		return this;
 	}
 	added(v) {
-		return Vec2.create(this.x + v.x, this.y + v.y);
+		return Vector.create(this.x + v.x, this.y + v.y);
 	}
 	sub(v) {
 		this.x -= v.x;
@@ -148,7 +143,7 @@ export class Vec2 {
 		return this;
 	}
 	subbed(v) {
-		return Vec2.create(this.x - v.x, this.y - v.y);
+		return Vector.create(this.x - v.x, this.y - v.y);
 	}
 	scale(f) {
 		this.x *= f;
@@ -156,7 +151,7 @@ export class Vec2 {
 		return this;
 	}
 	scaled(f) {
-		return Vec2.create(this.x * f, this.y * f);
+		return Vector.create(this.x * f, this.y * f);
 	}
 	distance(v) {
 		var dx = v.x - this.x;
@@ -174,10 +169,7 @@ export class Vec2 {
 		return this;
 	}
 	clone() {
-		return new Vec2(this.x, this.y);
-	}
-	dup() {
-		return this.clone();
+		return new Vector(this.x, this.y);
 	}
 	dot(b) {
 		return this.x * b.x + this.y * b.y;
@@ -190,10 +182,10 @@ export class Vec2 {
 		return this;
 	}
 	static create(x, y) {
-		return new Vec2(x, y);
+		return new Vector(x, y);
 	}
 	static fromArray(a) {
-		return new Vec2(a[0], a[1]);
+		return new Vector(a[0], a[1]);
 	}
 }
 
