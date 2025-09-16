@@ -282,11 +282,11 @@ export class Swarm {
 				case ANIM_TYPE_RAND_SQUARE:
 					sf *= 0.5;
 					break;
+				case ANIM_TYPE_CIRCULAR:
 				case ANIM_TYPE_SPIRAL:
 					sf *= 1.2;
 					break;
 				case ANIM_TYPE_SKITTER:
-				case ANIM_TYPE_CIRCULAR:
 				case ANIM_TYPE_STOPNMOVE:
 				case ANIM_TYPE_FORMATION_SQUARE:
 				default:
@@ -294,7 +294,7 @@ export class Swarm {
 			}
 
 			// Add 50% of the speed as variability on each sprites speed
-			this.speeds.push(sf * 0.5 + sf * Math.random() * 0.5);
+			this.speeds.push(sf * 5 + sf * Math.random() * 0.5);
 			// Add this sprite to the SwarmMesh
 			this.layer.addChild(sprite);
 		}
@@ -337,8 +337,10 @@ export class Swarm {
 		let docScaleY = this.object?.document?.texture?.scaleY ?? docScaleX;
 
 		// 4.5) Square docScale to allow for greater range of values.
-		docScaleX = docScaleX * docScaleX;
-		docScaleY = docScaleY * docScaleY;
+		if (docScaleX < 1 || docScaleY < 1) {
+			docScaleX = docScaleX * docScaleX;
+			docScaleY = docScaleY * docScaleY;
+		}
 
 		// 5) The scale already applied by the container / object mesh that we must undo.
 		//    This is typically the mesh/container scale that Foundry assigns.
@@ -485,6 +487,15 @@ export class Swarm {
 			this.debug.br.x = w;
 			this.debug.br.y = h;
 		}
+		const drawLine = (line, i) => {
+			const sprite = this.sprites[i];
+			const { x, y } = this.dest[i];
+			line.clear();
+			line.lineStyle(4, 0xffd900, 1);
+			line.moveTo(sprite.x, sprite.y);
+			line.lineTo(x, y);
+			line.endFill();
+		};
 		if (!this.debug.destinations) {
 			this.debug.destinations = this.dest.map(({ x, y }, i) => {
 				const text = new PIXI.Text(`d${i}`, {
@@ -494,12 +505,17 @@ export class Swarm {
 					y
 				});
 				this.layer.addChild(text);
-				return text;
+				const line = new PIXI.Graphics();
+				drawLine(line, i);
+				this.layer.addChild(line);
+				return { text, line };
 			});
 		} else {
-			this.debug.destinations.forEach((d, i) => {
-				d.x = this.dest[i].x;
-				d.y = this.dest[i].y;
+			this.debug.destinations.forEach(({ text, line }, i) => {
+				const { x, y } = this.dest[i];
+				text.x = x;
+				text.y = y;
+				drawLine(line, i);
 			});
 		}
 		this.debug.br.text = `Speed:${this.speeds[0].toFixed(3)}, ${ms.toFixed(3)}ms`;
@@ -676,23 +692,47 @@ export class Swarm {
 		}
 	}
 
+	/**
+	 * Calculates sprite destinations to create a spiral animation.
+	 * @param {number} ms - Milliseconds elapsed since the last frame.
+	 */
 	spiral(ms) {
+		// Update a shared time variable for the animation.
+		// 'ms / 30' scales the time progression.
 		this.t += ms / 30;
+
+		// Get the local dimensions of the swarm's bounding box.
 		const { w: localW, h: localH } = this._getLocalSize();
+
+		// Calculate the x and y radii for the spiral, based on the bounding box size.
 		const rx = 0.5 * localW;
 		const ry = 0.5 * localH;
+
+		// Loop through each sprite to calculate its next destination.
 		for (let i = 0; i < this.sprites.length; ++i) {
-			const t = this.speeds[i] * this.t * 0.02 + this.offsets[i];
+			// Calculate a unique time-based value for this sprite.
+			// This uses the sprite's individual speed and a random offset to
+			// make each sprite's movement slightly different.
+			const t = this.speeds[i] * this.t * 0.002 + this.offsets[i];
+
+			// Determine the sprite's position on a flattened ellipse.
+			// 'y' is scaled by 0.4, making the ellipse wider than it is tall.
 			const x = Math.cos(t);
 			const y = 0.4 * Math.sin(t);
 
+			// Calculate a rotation angle for the entire elliptical path.
+			// This makes the whole spiral appear to rotate over time.
 			const angle = t / (2 * Math.E);
-			const ci = Math.cos(angle);
-			const si = Math.sin(angle);
+			const ci = Math.cos(angle); // cosine of the rotation angle
+			const si = Math.sin(angle); // sine of the rotation angle
 
+			// Apply the rotation to the sprite's elliptical coordinates and scale by the radii.
+			// This is a standard 2D rotation transformation.
 			const final_x = rx * x * ci - ry * y * si;
 			const final_y = rx * x * si + ry * y * ci;
 
+			// Set the calculated position as the new destination for this sprite.
+			// The separate `move()` function will handle the animation toward this point.
 			this.dest[i] = {
 				x: final_x,
 				y: final_y
@@ -708,7 +748,7 @@ export class Swarm {
 		const _ry = 0.5 * localH;
 
 		for (let i = 0; i < this.sprites.length; ++i) {
-			const t = this.t * 0.02 + this.offsets[i];
+			const t = this.t * 0.002 + this.offsets[i];
 			const rY = 0.5 + 0.5 * (Math.sin(t * 0.3) + 0.3 * Math.sin(2 * t + 0.8) + 0.26 * Math.sin(3 * t + 0.8));
 			const x = Math.cos(t * this.speeds[i]);
 			const y = rY * Math.sin(t * this.speeds[i]);
@@ -728,31 +768,7 @@ export class Swarm {
 
 	move(ms) {
 		// Base desired world speed (pixels per millisecond) *before per-sprite variation.
-		const BASE_WORLD_SPEED_PX_PER_MS = 0.12;
-
-		// Determine the effective parent/world scale that will multiply the sprite's local scale
-		const parent = this.object?.swarmMesh;
-		let parentScaleX = 1;
-		let parentScaleY = 1;
-		if (parent) {
-			try {
-				// Ensure transform is current
-				if (typeof parent.updateTransform === "function") parent.updateTransform();
-			} catch (e) {
-				/* ignore */
-			}
-			const m = parent.worldTransform;
-			if (m) {
-				parentScaleX = Math.hypot(m.a || 0, m.b || 0) || 1;
-				parentScaleY = Math.hypot(m.c || 0, m.d || 0) || parentScaleX;
-			} else {
-				parentScaleX = (parent.scale?.x ?? 1) || 1;
-				parentScaleY = (parent.scale?.y ?? parentScaleX) || 1;
-			}
-		}
-		// Use average scale for converting magnitude
-		const parentScale = (parentScaleX + parentScaleY) / 2 || 1;
-
+		const BASE_WORLD_SPEED_PX_PER_MS = 0.3;
 		for (let i = 0; i < this.sprites.length; ++i) {
 			const sprite = this.sprites[i];
 			const destination = this.dest[i];
@@ -767,7 +783,7 @@ export class Swarm {
 				const worldSpeed = BASE_WORLD_SPEED_PX_PER_MS * this.speeds[i];
 
 				// Convert world speed into local units (local units / ms)
-				const localSpeed = worldSpeed / parentScale;
+				const localSpeed = worldSpeed; // parentScale;
 
 				// Movement vector in local units for this frame
 				let mv = utils.vMult(dir, localSpeed * ms);
