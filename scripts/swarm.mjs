@@ -294,7 +294,7 @@ export class Swarm {
 			}
 
 			// Add 50% of the speed as variability on each sprites speed
-			this.speeds.push(sf + sf * Math.random() * 0.5);
+			this.speeds.push(sf * 5 + sf * Math.random() * 0.5);
 			// Add this sprite to the SwarmMesh
 			this.layer.addChild(sprite);
 		}
