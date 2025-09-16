@@ -380,8 +380,8 @@ export class Swarm {
 		}
 
 		t = Math.min(t, 2.0); // Cap frame skip to two frames
-		// Milliseconds elapsed, as calculated using the "time" fraction and current fps
-		const ms = t * 1000 * (1.0 / this.tick.FPS);
+		// Milliseconds elapsed, as calculated using the "time" fraction and an optimistic 60fps
+		const ms = t * 1000 * (1.0 / 60);
 
 		let updateSprites = this.tint != this.document.texture.tint;
 
