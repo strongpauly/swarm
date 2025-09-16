@@ -282,11 +282,11 @@ export class Swarm {
 				case ANIM_TYPE_RAND_SQUARE:
 					sf *= 0.5;
 					break;
+				case ANIM_TYPE_CIRCULAR:
 				case ANIM_TYPE_SPIRAL:
 					sf *= 1.2;
 					break;
 				case ANIM_TYPE_SKITTER:
-				case ANIM_TYPE_CIRCULAR:
 				case ANIM_TYPE_STOPNMOVE:
 				case ANIM_TYPE_FORMATION_SQUARE:
 				default:
@@ -294,7 +294,7 @@ export class Swarm {
 			}
 
 			// Add 50% of the speed as variability on each sprites speed
-			this.speeds.push(sf * 0.5 + sf * Math.random() * 0.5);
+			this.speeds.push(sf + sf * Math.random() * 0.5);
 			// Add this sprite to the SwarmMesh
 			this.layer.addChild(sprite);
 		}
@@ -337,8 +337,10 @@ export class Swarm {
 		let docScaleY = this.object?.document?.texture?.scaleY ?? docScaleX;
 
 		// 4.5) Square docScale to allow for greater range of values.
-		docScaleX = docScaleX * docScaleX;
-		docScaleY = docScaleY * docScaleY;
+		if (docScaleX < 1 || docScaleY < 1) {
+			docScaleX = docScaleX * docScaleX;
+			docScaleY = docScaleY * docScaleY;
+		}
 
 		// 5) The scale already applied by the container / object mesh that we must undo.
 		//    This is typically the mesh/container scale that Foundry assigns.
@@ -711,7 +713,7 @@ export class Swarm {
 			// Calculate a unique time-based value for this sprite.
 			// This uses the sprite's individual speed and a random offset to
 			// make each sprite's movement slightly different.
-			const t = this.speeds[i] * this.t * 0.02 + this.offsets[i];
+			const t = this.speeds[i] * this.t * 0.002 + this.offsets[i];
 
 			// Determine the sprite's position on a flattened ellipse.
 			// 'y' is scaled by 0.4, making the ellipse wider than it is tall.
@@ -746,7 +748,7 @@ export class Swarm {
 		const _ry = 0.5 * localH;
 
 		for (let i = 0; i < this.sprites.length; ++i) {
-			const t = this.t * 0.02 + this.offsets[i];
+			const t = this.t * 0.002 + this.offsets[i];
 			const rY = 0.5 + 0.5 * (Math.sin(t * 0.3) + 0.3 * Math.sin(2 * t + 0.8) + 0.26 * Math.sin(3 * t + 0.8));
 			const x = Math.cos(t * this.speeds[i]);
 			const y = rY * Math.sin(t * this.speeds[i]);
