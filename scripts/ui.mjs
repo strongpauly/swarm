@@ -186,8 +186,12 @@ function imageSelector(app, flag_name, title) {
 	return grp;
 }
 
-const swarmsRenderConfig = (objectName) => (app, html, data) => {
+const swarmsRenderConfig = (objectName) => (app, html, data, options) => {
 	if (!game.user.isGM) return;
+
+	if (options?.hasOwnProperty("isFirstRender") && !options["isFirstRender"]) {
+		return;
+	}
 
 	// Create a new form group
 	const fieldSet = document.createElement("fieldset");
