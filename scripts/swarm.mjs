@@ -372,7 +372,7 @@ export class Swarm {
 	 * @param {Number} t Time fraction of the current fps
 	 */
 	anim(t) {
-		if (!this.object.texture.valid) {
+		if (!this.object.texture?.valid) {
 			return;
 		}
 		if (!this.created) {
@@ -803,6 +803,9 @@ export class Swarm {
 
 function createSwarm(object) {
 	object.swarm?.destroy();
+	if (!object.texture?.valid) {
+		return;
+	}
 	Hooks.call("preCreateSwarm", object);
 	object.swarm = new Swarm(object);
 }

@@ -15,6 +15,7 @@ import {
 	DEFAULT_ANIMATION,
 	DEFAULT_SWARM_SIZE,
 	DEFAULT_SWARM_SPEED,
+	LOCALIZATION_ROOT,
 	MOD_NAME,
 	SWARM_FLAG,
 	SWARM_SIZE_FLAG,
@@ -37,7 +38,16 @@ function createHint(hint, formGroup) {
 	formGroup.append(p);
 }
 
-function dropDownConfig({ parent, app, flag_name, default_value, values, hint }) {
+function dropDownConfig({
+	parent,
+	app,
+	flag_name,
+	default_value,
+	values,
+	hint,
+	label,
+	getOptionLabel = (option) => option
+}) {
 	const token = app.token ?? app.document;
 	let flags = token.flags;
 	if (flags === undefined) flags = token.data.flags;
@@ -46,7 +56,7 @@ function dropDownConfig({ parent, app, flag_name, default_value, values, hint })
 	formGroup.classList.add("form-group");
 	parent.append(formGroup);
 
-	formGroup.append(createLabel("Animation"));
+	formGroup.append(createLabel(label));
 
 	const formFields = document.createElement("div");
 	formFields.classList.add("form-fields");
@@ -59,7 +69,8 @@ function dropDownConfig({ parent, app, flag_name, default_value, values, hint })
 
 	for (let o of values) {
 		let opt = document.createElement("option");
-		opt.innerText = o;
+		opt.value = o;
+		opt.innerText = getOptionLabel(o);
 		if (cur === o) opt.classList.add("selected");
 		input.append(opt);
 	}
@@ -206,28 +217,28 @@ const swarmsRenderConfig = (objectName) => (app, html, data, options) => {
 		parent: fieldSet,
 		data_name: SWARM_FLAG,
 		default_value: false,
-		title: "Swarm Enabled",
-		hint: `Whether this ${objectName} is a swarm.`
+		title: game.i18n.format(`${LOCALIZATION_ROOT}.swarmEnabledTitle`),
+		hint: game.i18n.format(`${LOCALIZATION_ROOT}.swarmEnabledHint`, { objectName })
 	});
 	textBoxConfig({
 		app,
 		parent: fieldSet,
 		flag_name: SWARM_SIZE_FLAG,
-		title: "Count",
+		title: game.i18n.format(`${LOCALIZATION_ROOT}.countTitle`),
 		placeholder: DEFAULT_SWARM_SIZE,
 		default_value: DEFAULT_SWARM_SIZE,
 		step: 1,
-		hint: "Number of sprites in the swarm."
+		hint: game.i18n.format(`${LOCALIZATION_ROOT}.countHint`)
 	});
 	textBoxConfig({
 		app,
 		parent: fieldSet,
 		flag_name: SWARM_SPEED_FLAG,
-		title: "Speed",
+		title: game.i18n.format(`${LOCALIZATION_ROOT}.speedTitle`),
 		placeholder: DEFAULT_SWARM_SPEED,
 		default_value: DEFAULT_SWARM_SPEED,
 		step: 0.1,
-		hint: "Animation speed for the swarm."
+		hint: game.i18n.format(`${LOCALIZATION_ROOT}.speedHint`)
 	});
 	dropDownConfig({
 		app,
@@ -235,7 +246,9 @@ const swarmsRenderConfig = (objectName) => (app, html, data, options) => {
 		flag_name: ANIM_TYPE_FLAG,
 		values: ANIM_TYPES,
 		default_value: DEFAULT_ANIMATION,
-		hint: "Animation style for the swarm."
+		label: game.i18n.format(`${LOCALIZATION_ROOT}.animationTitle`),
+		hint: game.i18n.format(`${LOCALIZATION_ROOT}.animationHint`),
+		getOptionLabel: (option) => game.i18n.format(`${LOCALIZATION_ROOT}.animation.${option}`)
 	});
 
 	let appearanceTab = html[0].querySelector("div[data-tab='appearance']");
