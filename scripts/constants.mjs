@@ -1,4 +1,5 @@
 export const MOD_NAME = "swarm";
+export const LOCALIZATION_ROOT = "SWARM";
 export const SWARM_FLAG = "isSwarm";
 export const SWARM_SIZE_FLAG = "swarmSize";
 export const SWARM_SPEED_FLAG = "swarmSpeed";
