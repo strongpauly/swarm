@@ -22,23 +22,24 @@ import {
 	SWARM_SPEED_FLAG
 } from "./constants.mjs";
 
-function createLabel(text) {
-	const label = document.createElement("label");
+function createLabel(doc, text) {
+	const label = doc.createElement("label");
 	label.textContent = text;
 	return label;
 }
 
-function createHint(hint, formGroup) {
+function createHint(doc, hint, formGroup) {
 	if (!hint) {
 		return;
 	}
-	const p = document.createElement("p");
+	const p = doc.createElement("p");
 	p.classList.add("hint");
 	p.append(hint);
 	formGroup.append(p);
 }
 
 function dropDownConfig({
+	doc,
 	parent,
 	app,
 	flag_name,
@@ -52,23 +53,23 @@ function dropDownConfig({
 	let flags = token.flags;
 	if (flags === undefined) flags = token.data.flags;
 
-	const formGroup = document.createElement("div");
+	const formGroup = doc.createElement("div");
 	formGroup.classList.add("form-group");
 	parent.append(formGroup);
 
-	formGroup.append(createLabel(label));
+	formGroup.append(createLabel(doc, label));
 
-	const formFields = document.createElement("div");
+	const formFields = doc.createElement("div");
 	formFields.classList.add("form-fields");
 	formGroup.append(formFields);
 
 	const cur = flags?.[MOD_NAME]?.[flag_name] ?? default_value;
 	//parent.append(createLabel(title));
-	const input = document.createElement("select");
+	const input = doc.createElement("select");
 	input.name = "flags." + MOD_NAME + "." + flag_name;
 
 	for (let o of values) {
-		let opt = document.createElement("option");
+		let opt = doc.createElement("option");
 		opt.value = o;
 		opt.innerText = getOptionLabel(o);
 		if (cur === o) opt.classList.add("selected");
@@ -78,10 +79,11 @@ function dropDownConfig({
 
 	formFields.append(input);
 
-	createHint(hint, formGroup);
+	createHint(doc, hint, formGroup);
 }
 
 function textBoxConfig({
+	doc,
 	parent,
 	app,
 	flag_name,
@@ -96,18 +98,18 @@ function textBoxConfig({
 	let flags = token.flags;
 	if (flags === undefined) flags = token.data.flags;
 
-	const formGroup = document.createElement("div");
+	const formGroup = doc.createElement("div");
 	formGroup.classList.add("form-group");
 	formGroup.classList.add("slim");
 	parent.append(formGroup);
 
-	formGroup.append(createLabel(title));
+	formGroup.append(createLabel(doc, title));
 
-	const formFields = document.createElement("div");
+	const formFields = doc.createElement("div");
 	formFields.classList.add("form-fields");
 	formGroup.append(formFields);
 
-	const input = document.createElement("input");
+	const input = doc.createElement("input");
 	input.name = "flags." + MOD_NAME + "." + flag_name;
 	input.type = type;
 	if (step) input.step = step;
@@ -119,23 +121,23 @@ function textBoxConfig({
 		input.value = default_value;
 	}
 	formFields.append(input);
-	createHint(hint, formGroup);
+	createHint(doc, hint, formGroup);
 }
 
-function createCheckBox({ app, parent, data_name, title, hint }) {
+function createCheckBox({ app, doc, parent, data_name, title, hint }) {
 	const token = app.token || app.document;
 
-	const formGroup = document.createElement("div");
+	const formGroup = doc.createElement("div");
 	formGroup.classList.add("form-group");
 	parent.append(formGroup);
 
-	formGroup.append(createLabel(title));
+	formGroup.append(createLabel(doc, title));
 
-	const formFields = document.createElement("div");
+	const formFields = doc.createElement("div");
 	formFields.classList.add("form-fields");
 	formGroup.append(formFields);
 
-	const input = document.createElement("input");
+	const input = doc.createElement("input");
 	input.name = "flags." + MOD_NAME + "." + data_name;
 	input.type = "checkbox";
 	input.setAttribute("data-dtype", "Boolean");
@@ -144,76 +146,31 @@ function createCheckBox({ app, parent, data_name, title, hint }) {
 	}
 	formFields.append(input);
 
-	createHint(hint, formGroup);
-}
-
-function imageSelector(app, flag_name, title) {
-	let data_path = "flags." + MOD_NAME + "." + flag_name;
-
-	let flags = app.token.flags;
-	if (flags === undefined) flags = app.token.data.flags;
-
-	let grp = document.createElement("div");
-	grp.classList.add("form-group");
-	let label = document.createElement("label");
-	label.innerText = title;
-	let fields = document.createElement("div");
-	fields.classList.add("form-fields");
-
-	const button = document.createElement("button");
-	button.classList.add("file-picker");
-	button.type = "button";
-	button.title = "Browse Files";
-	button.tabindex = "-1";
-	button.dataset.target = data_path;
-	button["data-type"] = "imagevideo";
-	button["data-target"] = data_path;
-
-	button.onclick = app._activateFilePicker.bind(app);
-
-	let bi = document.createElement("i");
-	bi.classList.add("fas");
-	bi.classList.add("fa-file-import");
-	bi.classList.add("fa-fw");
-
-	const inpt = document.createElement("input");
-	inpt.name = data_path;
-	inpt.classList.add("image");
-	inpt.type = "text";
-	inpt.title = title;
-	inpt.placeholder = "path/image.png";
-	// Insert the flags current value into the input box
-	if (flags?.[MOD_NAME]?.[flag_name]) {
-		inpt.value = flags?.[MOD_NAME]?.[flag_name];
-	}
-
-	button.append(bi);
-
-	grp.append(label);
-	grp.append(fields);
-
-	fields.append(button);
-	fields.append(inpt);
-	return grp;
+	createHint(doc, hint, formGroup);
 }
 
 const swarmsRenderConfig = (objectName) => (app, html, data, options) => {
 	if (!game.user.isGM) return;
 
-	if (options?.hasOwnProperty("isFirstRender") && !options["isFirstRender"]) {
+	const doc = app.element?.ownerDocument || document;
+
+	const tab = "appearance";
+
+	if (options?.parts && !options.parts.includes(tab)) {
 		return;
 	}
 
 	// Create a new form group
-	const fieldSet = document.createElement("fieldset");
+	const fieldSet = doc.createElement("fieldset");
 
 	// Create a legend for this setting
-	const legend = document.createElement("legend");
+	const legend = doc.createElement("legend");
 	legend.textContent = "Swarm";
 	fieldSet.append(legend);
 
 	createCheckBox({
 		app,
+		doc,
 		parent: fieldSet,
 		data_name: SWARM_FLAG,
 		default_value: false,
@@ -222,6 +179,7 @@ const swarmsRenderConfig = (objectName) => (app, html, data, options) => {
 	});
 	textBoxConfig({
 		app,
+		doc,
 		parent: fieldSet,
 		flag_name: SWARM_SIZE_FLAG,
 		title: game.i18n.format(`${LOCALIZATION_ROOT}.countTitle`),
@@ -232,6 +190,7 @@ const swarmsRenderConfig = (objectName) => (app, html, data, options) => {
 	});
 	textBoxConfig({
 		app,
+		doc,
 		parent: fieldSet,
 		flag_name: SWARM_SPEED_FLAG,
 		title: game.i18n.format(`${LOCALIZATION_ROOT}.speedTitle`),
@@ -242,6 +201,7 @@ const swarmsRenderConfig = (objectName) => (app, html, data, options) => {
 	});
 	dropDownConfig({
 		app,
+		doc,
 		parent: fieldSet,
 		flag_name: ANIM_TYPE_FLAG,
 		values: ANIM_TYPES,
@@ -251,18 +211,13 @@ const swarmsRenderConfig = (objectName) => (app, html, data, options) => {
 		getOptionLabel: (option) => game.i18n.format(`${LOCALIZATION_ROOT}.animation.${option}`)
 	});
 
-	let appearanceTab = html[0].querySelector("div[data-tab='appearance']");
+	let appearanceTab = html[0].querySelector(`div[data-tab='${tab}']`);
 	if (!appearanceTab) {
 		// Since v13 Application V2 passes root html
-		appearanceTab = html.querySelector("div[data-tab='appearance']");
+		appearanceTab = html.querySelector(`div[data-tab='${tab}']`);
 	}
 	// Add the form group to the bottom of the Appearance tab
 	appearanceTab.append(fieldSet);
-
-	// Add difference swarm image
-	//const swarmImage = imageSelector(app, SWARM_IMAGE_FLAG, "Token for Swarm mobs");
-	// And add the token image selectors to the 'apperance' tab
-	//html[0].querySelector("div[data-tab='appearance']").append(swarmImage);
 
 	// Set the apps height correctly
 	app.setPosition();
