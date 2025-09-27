@@ -1006,9 +1006,13 @@ Hooks.once("init", () => {
 		default: 5.0
 	});
 
+	const pcg = foundry?.canvas?.groups?.PrimaryCanvasGroup
+		? "foundry.canvas.groups.PrimaryCanvasGroup"
+		: "PrimaryCanvasGroup";
+
 	libWrapper.register(
 		MOD_NAME,
-		"PrimaryCanvasGroup.prototype.addToken",
+		`${pcg}.prototype.addToken`,
 		// Creates a mesh for the token and adds to the canvas groups children.
 		// What is returned will be set as token.mesh
 		function swarmsAddToken(wrapped, token) {
@@ -1024,7 +1028,7 @@ Hooks.once("init", () => {
 
 	libWrapper.register(
 		MOD_NAME,
-		"PrimaryCanvasGroup.prototype.addTile",
+		`${pcg}.prototype.addTile`,
 		// Creates a mesh for the tile and adds to the canvas groups children.
 		// What is returned will be set as tile.mesh
 		function swarmsAddTile(wrapped, tile) {
