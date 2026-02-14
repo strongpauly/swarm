@@ -163,6 +163,8 @@ export class Swarm {
 		}
 
 		this.layer = object.swarmMesh;
+		// Track the mesh's world position to detect movement between frames
+		this.lastWorldPos = { x: this.layer.position.x, y: this.layer.position.y };
 
 		if (!canvas.primary.children.includes(object.swarmMesh)) {
 			canvas.primary.addChild(object.swarmMesh);
@@ -382,6 +384,32 @@ export class Swarm {
 		t = Math.min(t, 2.0); // Cap frame skip to two frames
 		// Milliseconds elapsed, as calculated using the "time" fraction and an optimistic 60fps
 		const ms = t * 1000 * (1.0 / 60);
+
+		// Movement compensation: make sprites trail behind during token movement
+		const currentWorldPos = { x: this.layer.position.x, y: this.layer.position.y };
+		const worldDeltaX = currentWorldPos.x - this.lastWorldPos.x;
+		const worldDeltaY = currentWorldPos.y - this.lastWorldPos.y;
+
+		// Skip trailing for teleport movement type
+		const isTeleport = !this.isTile
+			&& CONFIG.Token.movement.actions[this.document.movementAction]?.teleport;
+
+		if (!isTeleport && (worldDeltaX !== 0 || worldDeltaY !== 0)) {
+			// Skip compensation for large jumps (delta > 2x token size)
+			const maxDelta = (this.isTile ? this.object.bounds.width : this.object.w) * 2;
+			if (worldDeltaX * worldDeltaX + worldDeltaY * worldDeltaY < maxDelta * maxDelta) {
+				const scaleX = this.layer.scale.x || 1;
+				const scaleY = this.layer.scale.y || 1;
+				const localOffsetX = -worldDeltaX / scaleX;
+				const localOffsetY = -worldDeltaY / scaleY;
+
+				for (let i = 0; i < this.sprites.length; ++i) {
+					this.sprites[i].x += localOffsetX;
+					this.sprites[i].y += localOffsetY;
+				}
+			}
+		}
+		this.lastWorldPos = currentWorldPos;
 
 		let updateSprites = this.tint != this.document.texture.tint;
 
@@ -639,39 +667,48 @@ export class Swarm {
 
 		const cellW = localW / cols;
 		const cellH = localH / rows;
+		const cosA = Math.cos(angle);
+		const sinA = Math.sin(angle);
 
+		// Compute all grid positions
+		const gridPositions = [];
 		for (let i = 0; i < n; ++i) {
-			const sprite = this.sprites[i];
-
-			// Row/column in logical grid (top-left origin)
 			const row = Math.floor(i / cols);
 			const indexInRow = i - row * cols;
-
-			// If this is the last row and it's not full, center the items in that row
 			const itemsInThisRow = row === rows - 1 ? n - (rows - 1) * cols : cols;
 			const rowOffsetX = (localW - itemsInThisRow * cellW) / 2;
-
-			// Position in top-left local coordinates (0..localW, 0..localH)
 			const x = rowOffsetX + (indexInRow + 0.5) * cellW;
 			const y = (row + 0.5) * cellH;
-
-			// Rotate around the object center:
-			// translate to center, rotate, translate back
 			const tx = x - center.x;
 			const ty = y - center.y;
-			const cosA = Math.cos(angle);
-			const sinA = Math.sin(angle);
-			const rx = tx * cosA - ty * sinA;
-			const ry = tx * sinA + ty * cosA;
-			const dest = { x: rx, y: ry };
+			gridPositions.push({
+				x: tx * cosA - ty * sinA,
+				y: tx * sinA + ty * cosA
+			});
+		}
 
-			// Use utils for distance check / rotation snapping
-			const d = utils.vSub(dest, { x: sprite.x, y: sprite.y });
-			const len = utils.vLen(d);
-			if (len < SIGMA) {
+		// Assign each sprite to the nearest available grid position
+		const assigned = new Array(n).fill(false);
+		for (let i = 0; i < n; ++i) {
+			const sprite = this.sprites[i];
+			let bestIdx = -1;
+			let bestDistSq = Infinity;
+			for (let j = 0; j < n; ++j) {
+				if (assigned[j]) continue;
+				const dx = gridPositions[j].x - sprite.x;
+				const dy = gridPositions[j].y - sprite.y;
+				const distSq = dx * dx + dy * dy;
+				if (distSq < bestDistSq) {
+					bestDistSq = distSq;
+					bestIdx = j;
+				}
+			}
+			assigned[bestIdx] = true;
+
+			if (bestDistSq < SIGMA) {
 				sprite.rotation = angle;
 			} else {
-				this.dest[i] = dest;
+				this.dest[i] = gridPositions[bestIdx];
 			}
 		}
 	}
@@ -1005,7 +1042,6 @@ Hooks.once("init", () => {
 		type: Number,
 		default: 5.0
 	});
-
 	const pcg = foundry?.canvas?.groups?.PrimaryCanvasGroup
 		? "foundry.canvas.groups.PrimaryCanvasGroup"
 		: "PrimaryCanvasGroup";
