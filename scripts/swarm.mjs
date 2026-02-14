@@ -145,6 +145,15 @@ export class Swarm {
 		this.waiting = [];
 		this.isTile = object instanceof foundry.canvas.placeables.Tile;
 
+		// Cache settings and lookups that don't change per frame
+		this._isGM = game.user.isGM;
+		this._gridSize = game.canvas.grid.size;
+		this._fadeTime = game.settings.get(MOD_NAME, SETTING_FADE_TIME);
+		this._stopTime = game.settings.get(MOD_NAME, SETTING_STOP_TIME);
+		this._isTeleport =
+			!this.isTile && CONFIG.Token.movement.actions[this.document.movementAction]?.teleport;
+		this._localSize = { w: 0, h: 0, scaleX: 0, scaleY: 0 };
+
 		if (!object.swarmMesh) {
 			object.swarmMesh = new SwarmMesh(object, document);
 			object.swarmMesh.position.set(object.center.x, object.center.y);
@@ -210,22 +219,27 @@ export class Swarm {
 	}
 
 	/**
+	 * Update cached object-local (unscaled) dimensions that compensate for the object mesh scale.
+	 * Only recalculates when scale has changed.
+	 */
+	_updateLocalSize() {
+		const mesh = this.object?.mesh;
+		const scaleX = mesh?.scale?.x ?? 1;
+		const scaleY = mesh?.scale?.y ?? scaleX;
+		if (scaleX === this._localSize.scaleX && scaleY === this._localSize.scaleY) return;
+		this._localSize.w = (this.isTile ? this.object.bounds.width : this.object.w) / scaleX;
+		this._localSize.h = (this.isTile ? this.object.bounds.height : this.object.h) / scaleY;
+		this._localSize.scaleX = scaleX;
+		this._localSize.scaleY = scaleY;
+	}
+
+	/**
 	 * Return object-local (unscaled) dimensions that compensate for the object mesh scale.
 	 * Use these for position/destination math so object.scale only changes visual size.
 	 * @returns {{w:number,h:number,scaleX:number,scaleY:number}}
 	 */
 	_getLocalSize() {
-		const mesh = this.object?.mesh;
-		const scaleX = mesh?.scale?.x ?? 1;
-		const scaleY = mesh?.scale?.y ?? scaleX;
-		// object.w / scaleX gives the local coordinate width such that after parent-scaling
-		// worldWidth = localWidth * scaleX === this.object.w (old behaviour).
-		return {
-			w: (this.isTile ? this.object.bounds.width : this.object.w) / scaleX,
-			h: (this.isTile ? this.object.bounds.height : this.object.h) / scaleY,
-			scaleX,
-			scaleY
-		};
+		return this._localSize;
 	}
 
 	async createSprites(number) {
@@ -314,10 +328,9 @@ export class Swarm {
 	}
 
 	determineStep(ms) {
-		const fd = game.settings.get(MOD_NAME, SETTING_FADE_TIME);
 		const count = Math.abs(this.visible - this.number);
 		// step, corresponding to the module setting "fade time", also, prevent division by zero
-		return fd == 0 ? count : (ms * count) / (fd * 1000);
+		return this._fadeTime == 0 ? count : (ms * count) / (this._fadeTime * 1000);
 	}
 
 	#getScale(sprite) {
@@ -329,7 +342,7 @@ export class Swarm {
 		const smax = Math.max(texW, texH);
 
 		// 2) Set DESIRED_WORLD_SIZE_PX to the canvas grid size.
-		const DESIRED_WORLD_SIZE_PX = game.canvas.grid.size;
+		const DESIRED_WORLD_SIZE_PX = this._gridSize;
 
 		// 3) The base scale that would make the texture's largest side equal DESIRED_WORLD_SIZE_PX.
 		const baseScale = DESIRED_WORLD_SIZE_PX / smax;
@@ -377,6 +390,10 @@ export class Swarm {
 		if (!this.object.texture?.valid) {
 			return;
 		}
+
+		// Update cached local size (only recalculates when scale changes)
+		this._updateLocalSize();
+
 		if (!this.created) {
 			this.createSprites(this.maxSprites); // Use maxSprites instead of number
 		}
@@ -386,15 +403,12 @@ export class Swarm {
 		const ms = t * 1000 * (1.0 / 60);
 
 		// Movement compensation: make sprites trail behind during token movement
-		const currentWorldPos = { x: this.layer.position.x, y: this.layer.position.y };
-		const worldDeltaX = currentWorldPos.x - this.lastWorldPos.x;
-		const worldDeltaY = currentWorldPos.y - this.lastWorldPos.y;
+		const curX = this.layer.position.x;
+		const curY = this.layer.position.y;
+		const worldDeltaX = curX - this.lastWorldPos.x;
+		const worldDeltaY = curY - this.lastWorldPos.y;
 
-		// Skip trailing for teleport movement type
-		const isTeleport = !this.isTile
-			&& CONFIG.Token.movement.actions[this.document.movementAction]?.teleport;
-
-		if (!isTeleport && (worldDeltaX !== 0 || worldDeltaY !== 0)) {
+		if (!this._isTeleport && (worldDeltaX !== 0 || worldDeltaY !== 0)) {
 			// Skip compensation for large jumps (delta > 2x token size)
 			const maxDelta = (this.isTile ? this.object.bounds.width : this.object.w) * 2;
 			if (worldDeltaX * worldDeltaX + worldDeltaY * worldDeltaY < maxDelta * maxDelta) {
@@ -409,7 +423,8 @@ export class Swarm {
 				}
 			}
 		}
-		this.lastWorldPos = currentWorldPos;
+		this.lastWorldPos.x = curX;
+		this.lastWorldPos.y = curY;
 
 		let updateSprites = this.tint != this.document.texture.tint;
 
@@ -459,8 +474,9 @@ export class Swarm {
 				getScale = (sprite) => this.#getScale(sprite);
 			}
 
-			this.sprites.forEach((sprite, i) => {
-				sprite.alpha = i >= remaining ? 1 : this.faded && game.user.isGM ? 0.2 : 0;
+			for (let i = 0; i < this.sprites.length; ++i) {
+				const sprite = this.sprites[i];
+				sprite.alpha = i >= remaining ? 1 : this.faded && this._isGM ? 0.2 : 0;
 				const scale = getScale(sprite);
 				if (scale) {
 					sprite.scale.set(scale.x, scale.y);
@@ -468,7 +484,7 @@ export class Swarm {
 				if (this.document.texture.tint) {
 					this.tint = sprite.tint = this.document.texture.tint;
 				}
-			});
+			}
 		}
 
 		// Calling the animation specific method, setDestinations
@@ -604,30 +620,40 @@ export class Swarm {
 
 		const pcp = pcs.map((t) => t.center);
 		const occ = pcs.map((t) => (0.55 * t.w) ** 2);
+		const centerX = this.object.center.x;
+		const centerY = this.object.center.y;
 
 		for (let i = 0; i < this.sprites.length; ++i) {
 			const s = this.sprites[i];
 			// sprite's global position: convert from center-relative local -> global using object.center
-			const sp = { x: s.x + this.object.center.x, y: s.y + this.object.center.y };
+			const spx = s.x + centerX;
+			const spy = s.y + centerY;
 
-			const dists2 = pcp.map((p) => (sp.x - p.x) ** 2 + (sp.y - p.y) ** 2);
-			const smallest = utils.argMin(dists2);
+			// Find nearest PC (inline argMin)
+			let smallest = 0;
+			let smallestDist2 = (spx - pcp[0].x) ** 2 + (spy - pcp[0].y) ** 2;
+			for (let j = 1; j < pcp.length; ++j) {
+				const d2 = (spx - pcp[j].x) ** 2 + (spy - pcp[j].y) ** 2;
+				if (d2 < smallestDist2) {
+					smallestDist2 = d2;
+					smallest = j;
+				}
+			}
 
-			if (dists2[smallest] < occ[smallest]) {
+			if (smallestDist2 < occ[smallest]) {
 				// We are "inside" a player
-				const out = utils.vSub(sp, pcp[smallest]);
-				if (out.x ** 2 + out.y ** 2 > THETA) {
-					const shortest_direction_out_normed = utils.vNorm(out);
-					const distance_left_out = 0.1 + Math.sqrt(occ[smallest]) - Math.sqrt(dists2[smallest]);
-					const newDestGlobal = utils.vAdd(
-						sp,
-						utils.vMult(shortest_direction_out_normed, 1.5 * distance_left_out)
-					);
+				const outX = spx - pcp[smallest].x;
+				const outY = spy - pcp[smallest].y;
+				const outLenSq = outX * outX + outY * outY;
+				if (outLenSq > THETA) {
+					const outLen = Math.sqrt(outLenSq);
+					const normX = outX / outLen;
+					const normY = outY / outLen;
+					const distance_left_out = 0.1 + Math.sqrt(occ[smallest]) - Math.sqrt(smallestDist2);
+					const push = 1.5 * distance_left_out;
 					// convert back to local coordinates relative to object center
-					this.dest[i] = {
-						x: newDestGlobal.x - this.object.center.x,
-						y: newDestGlobal.y - this.object.center.y
-					};
+					this.dest[i].x = spx + normX * push - centerX;
+					this.dest[i].y = spy + normY * push - centerY;
 				}
 			}
 		}
@@ -637,15 +663,14 @@ export class Swarm {
 		const { w: localW, h: localH } = this._getLocalSize();
 
 		for (let i = 0; i < this.sprites.length; ++i) {
-			let s = this.sprites[i];
-			let d = utils.vSub(this.dest[i], { x: s.x, y: s.y });
-			if (d.x ** 2 + d.y ** 2 < SIGMA) {
+			const s = this.sprites[i];
+			const dx = this.dest[i].x - s.x;
+			const dy = this.dest[i].y - s.y;
+			if (dx * dx + dy * dy < SIGMA) {
 				if (this.waiting[i] <= 0) {
-					this.dest[i] = {
-						x: Math.random() * localW - localW / 2,
-						y: Math.random() * localH - localH / 2
-					};
-					this.waiting[i] = Math.random() * game.settings.get(MOD_NAME, SETTING_STOP_TIME) * 1000;
+					this.dest[i].x = Math.random() * localW - localW / 2;
+					this.dest[i].y = Math.random() * localH - localH / 2;
+					this.waiting[i] = Math.random() * this._stopTime * 1000;
 				} else {
 					this.waiting[i] -= ms;
 				}
@@ -708,7 +733,8 @@ export class Swarm {
 			if (bestDistSq < SIGMA) {
 				sprite.rotation = angle;
 			} else {
-				this.dest[i] = gridPositions[bestIdx];
+				this.dest[i].x = gridPositions[bestIdx].x;
+				this.dest[i].y = gridPositions[bestIdx].y;
 			}
 		}
 	}
@@ -717,14 +743,13 @@ export class Swarm {
 		const { w: localW, h: localH } = this._getLocalSize();
 
 		for (let i = 0; i < this.sprites.length; ++i) {
-			let s = this.sprites[i];
-			let d = utils.vSub(this.dest[i], { x: s.x, y: s.y });
-			let len = utils.vLen(d);
-			if (len < SIGMA || len > GAMMA) {
-				this.dest[i] = {
-					x: Math.random() * localW - localW / 2,
-					y: Math.random() * localH - localH / 2
-				};
+			const s = this.sprites[i];
+			const dx = this.dest[i].x - s.x;
+			const dy = this.dest[i].y - s.y;
+			const lenSq = dx * dx + dy * dy;
+			if (lenSq < SIGMA * SIGMA || lenSq > GAMMA * GAMMA) {
+				this.dest[i].x = Math.random() * localW - localW / 2;
+				this.dest[i].y = Math.random() * localH - localH / 2;
 			}
 		}
 	}
@@ -770,10 +795,8 @@ export class Swarm {
 
 			// Set the calculated position as the new destination for this sprite.
 			// The separate `move()` function will handle the animation toward this point.
-			this.dest[i] = {
-				x: final_x,
-				y: final_y
-			};
+			this.dest[i].x = final_x;
+			this.dest[i].y = final_y;
 		}
 	}
 
@@ -796,10 +819,8 @@ export class Swarm {
 			const final_x = _rx * x * ci - _ry * y * si;
 			const final_y = _rx * x * si + _ry * y * ci;
 
-			this.dest[i] = {
-				x: final_x,
-				y: final_y
-			};
+			this.dest[i].x = final_x;
+			this.dest[i].y = final_y;
 		}
 	}
 
@@ -808,31 +829,22 @@ export class Swarm {
 		const BASE_WORLD_SPEED_PX_PER_MS = 0.3;
 		for (let i = 0; i < this.sprites.length; ++i) {
 			const sprite = this.sprites[i];
-			const destination = this.dest[i];
-			const diff = utils.vSub(destination, { x: sprite.x, y: sprite.y });
-
-			const diffLenSq = diff.x ** 2 + diff.y ** 2;
-			if (diffLenSq > THETA) {
-				// Normalised direction in local coordinates
-				const dir = utils.vNorm(diff);
-
-				// Desired world speed for this sprite (px / ms)
-				const worldSpeed = BASE_WORLD_SPEED_PX_PER_MS * this.speeds[i];
-
-				// Convert world speed into local units (local units / ms)
-				const localSpeed = worldSpeed; // parentScale;
-
-				// Movement vector in local units for this frame
-				let mv = utils.vMult(dir, localSpeed * ms);
-
-				// Don't overshoot
-				const mvLenSq = mv.x ** 2 + mv.y ** 2;
-				if (mvLenSq > diffLenSq) {
-					mv = diff;
+			const dest = this.dest[i];
+			const dx = dest.x - sprite.x;
+			const dy = dest.y - sprite.y;
+			const distSq = dx * dx + dy * dy;
+			if (distSq > THETA) {
+				const dist = Math.sqrt(distSq);
+				const speed = BASE_WORLD_SPEED_PX_PER_MS * this.speeds[i] * ms;
+				if (speed * speed >= distSq) {
+					sprite.x = dest.x;
+					sprite.y = dest.y;
+				} else {
+					const factor = speed / dist;
+					sprite.x += dx * factor;
+					sprite.y += dy * factor;
 				}
-				sprite.x += mv.x;
-				sprite.y += mv.y;
-				sprite.rotation = -Math.PI / 2 + utils.vRad(diff);
+				sprite.rotation = -Math.PI / 2 + Math.atan2(dy, dx);
 			}
 		}
 	}
