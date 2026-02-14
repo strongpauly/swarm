@@ -163,6 +163,8 @@ export class Swarm {
 		}
 
 		this.layer = object.swarmMesh;
+		// Track the mesh's world position to detect movement between frames
+		this.lastWorldPos = { x: this.layer.position.x, y: this.layer.position.y };
 
 		if (!canvas.primary.children.includes(object.swarmMesh)) {
 			canvas.primary.addChild(object.swarmMesh);
@@ -382,6 +384,28 @@ export class Swarm {
 		t = Math.min(t, 2.0); // Cap frame skip to two frames
 		// Milliseconds elapsed, as calculated using the "time" fraction and an optimistic 60fps
 		const ms = t * 1000 * (1.0 / 60);
+
+		// Movement compensation: make sprites trail behind during token movement
+		const currentWorldPos = { x: this.layer.position.x, y: this.layer.position.y };
+		const worldDeltaX = currentWorldPos.x - this.lastWorldPos.x;
+		const worldDeltaY = currentWorldPos.y - this.lastWorldPos.y;
+
+		if (worldDeltaX !== 0 || worldDeltaY !== 0) {
+			// Skip compensation for teleports (delta > 2x token size)
+			const maxDelta = (this.isTile ? this.object.bounds.width : this.object.w) * 2;
+			if (worldDeltaX * worldDeltaX + worldDeltaY * worldDeltaY < maxDelta * maxDelta) {
+				const scaleX = this.layer.scale.x || 1;
+				const scaleY = this.layer.scale.y || 1;
+				const localOffsetX = -worldDeltaX / scaleX;
+				const localOffsetY = -worldDeltaY / scaleY;
+
+				for (let i = 0; i < this.sprites.length; ++i) {
+					this.sprites[i].x += localOffsetX;
+					this.sprites[i].y += localOffsetY;
+				}
+			}
+		}
+		this.lastWorldPos = currentWorldPos;
 
 		let updateSprites = this.tint != this.document.texture.tint;
 
