@@ -107,6 +107,12 @@ function getHealthEstimate(token) {
 	return 1;
 }
 
+/** Ease-out with slight overshoot — snappy shift then settle. */
+function _easeOutBack(p) {
+	const q = p - 1;
+	return 1 + 1.4 * q * q * q + q * q;
+}
+
 class SwarmMesh extends PrimarySpriteMesh {
 	_render(_renderer) {
 		// Base Sprite shouldn't be rendered
@@ -693,28 +699,43 @@ export class Swarm {
 
 		const angle = this.object.document.rotation * (Math.PI / 180);
 		const { w: localW, h: localH } = this._getLocalSize();
-		const center = { x: localW / 2, y: localH / 2 };
+		const centerX = localW / 2;
+		const centerY = localH / 2;
 
 		const cellW = localW / cols;
 		const cellH = localH / rows;
 		const cosA = Math.cos(angle);
 		const sinA = Math.sin(angle);
 
-		// Compute all grid positions
-		const gridPositions = [];
-		for (let i = 0; i < n; ++i) {
-			const row = Math.floor(i / cols);
-			const indexInRow = i - row * cols;
-			const itemsInThisRow = row === rows - 1 ? n - (rows - 1) * cols : cols;
-			const rowOffsetX = (localW - itemsInThisRow * cellW) / 2;
-			const x = rowOffsetX + (indexInRow + 0.5) * cellW;
-			const y = (row + 0.5) * cellH;
-			const tx = x - center.x;
-			const ty = y - center.y;
-			gridPositions.push({
-				x: tx * cosA - ty * sinA,
-				y: tx * sinA + ty * cosA
-			});
+		// Reuse cached grid arrays — only reallocate when sprite count changes
+		if (!this._formGrid || this._formGrid.length !== n) {
+			this._formGrid = new Array(n);
+			for (let i = 0; i < n; ++i) this._formGrid[i] = { x: 0, y: 0 };
+			this._formAssigned = new Array(n);
+			this._formGridAssign = new Array(n);
+			this._formGridAngle = -Infinity;
+			this._formGridW = -1;
+			this._formGridH = -1;
+		}
+		const gridPositions = this._formGrid;
+		const assigned = this._formAssigned;
+		const gridAssignments = this._formGridAssign;
+
+		// Recompute grid positions only when angle or dimensions change
+		if (angle !== this._formGridAngle || localW !== this._formGridW || localH !== this._formGridH) {
+			this._formGridAngle = angle;
+			this._formGridW = localW;
+			this._formGridH = localH;
+			for (let i = 0; i < n; ++i) {
+				const row = Math.floor(i / cols);
+				const indexInRow = i - row * cols;
+				const itemsInThisRow = row === rows - 1 ? n - (rows - 1) * cols : cols;
+				const rowOffsetX = (localW - itemsInThisRow * cellW) / 2;
+				const tx = rowOffsetX + (indexInRow + 0.5) * cellW - centerX;
+				const ty = (row + 0.5) * cellH - centerY;
+				gridPositions[i].x = tx * cosA - ty * sinA;
+				gridPositions[i].y = tx * sinA + ty * cosA;
+			}
 		}
 
 		// Initialize independent shuffle slots — each has its own cooldown so they never synchronize
@@ -736,14 +757,9 @@ export class Swarm {
 			slots.push({ cooldown: 6000 + Math.random() * 12000, index: -1, timer: 0, baseX: 0, baseY: 0 });
 		}
 
-		const activeIndices = new Set();
-		for (const slot of slots) {
-			if (slot.index >= 0) activeIndices.add(slot.index);
-		}
-
+		// Check active shuffle indices directly from slots (avoids Set allocation)
 		// Assign each sprite to the nearest available grid position
-		const assigned = new Array(n).fill(false);
-		const gridAssignments = new Array(n);
+		for (let i = 0; i < n; ++i) assigned[i] = false;
 		let settledCount = 0;
 		for (let i = 0; i < n; ++i) {
 			const sprite = this.sprites[i];
@@ -763,7 +779,14 @@ export class Swarm {
 			gridAssignments[i] = bestIdx;
 
 			// Skip normal destination for actively shuffling sprites
-			if (activeIndices.has(i)) {
+			let isShuffling = false;
+			for (let s = 0; s < slots.length; ++s) {
+				if (slots[s].index === i) {
+					isShuffling = true;
+					break;
+				}
+			}
+			if (isShuffling) {
 				sprite.rotation = angle;
 				settledCount++;
 				continue;
@@ -781,11 +804,9 @@ export class Swarm {
 		// Process each shuffle slot independently
 		const isSettled = settledCount >= n * 0.8;
 		const baseDist = Math.min(cellW, cellH);
-		const perpX = cosA;
-		const perpY = sinA;
-		const easeOutBack = (p) => 1 + 1.4 * (p - 1) ** 3 + (p - 1) ** 2;
 
-		for (const slot of slots) {
+		for (let si = 0; si < slots.length; ++si) {
+			const slot = slots[si];
 			// Idle slot — tick its own cooldown independently
 			if (slot.index === -1) {
 				if (!isSettled) {
@@ -795,33 +816,47 @@ export class Swarm {
 				slot.cooldown -= ms;
 				if (slot.cooldown > 0) continue;
 
-				// Pick a random sprite not already shuffling
-				const candidates = [];
-				for (let j = 0; j < n; j++) {
-					if (!activeIndices.has(j)) candidates.push(j);
-				}
-				if (candidates.length === 0) {
+				// Pick a random sprite not already shuffling via rejection sampling
+				let idx;
+				let attempts = n;
+				do {
+					idx = Math.floor(Math.random() * n);
+					let taken = false;
+					for (let s = 0; s < slots.length; ++s) {
+						if (slots[s].index === idx) {
+							taken = true;
+							break;
+						}
+					}
+					if (!taken) break;
+					idx = -1;
+				} while (--attempts > 0);
+				if (idx === -1) {
 					slot.cooldown = 1000;
 					continue;
 				}
-				const idx = candidates[Math.floor(Math.random() * candidates.length)];
 				slot.index = idx;
 				slot.timer = 0;
 				const gi = gridAssignments[idx];
 				slot.baseX = gridPositions[gi].x;
 				slot.baseY = gridPositions[gi].y;
-				activeIndices.add(idx);
 
 				// Randomize this shuffle's character, scaled by swarm speed
 				const sf = this.document.getFlag(MOD_NAME, SWARM_SPEED_FLAG) ?? DEFAULT_SWARM_SPEED;
 				const pace = 1 / Math.max(0.1, sf);
 				slot.dist = baseDist * (0.08 + Math.random() * 0.14);
 				slot.dir = Math.random() < 0.5 ? 1 : -1;
-				slot.snap1 = (160 + Math.random() * 140) * pace;
-				slot.hold1 = (300 + Math.random() * 300) * pace;
-				slot.cross = (200 + Math.random() * 200) * pace;
-				slot.hold2 = (300 + Math.random() * 300) * pace;
-				slot.snap2 = (160 + Math.random() * 140) * pace;
+				const snap1 = (160 + Math.random() * 140) * pace;
+				const hold1 = (300 + Math.random() * 300) * pace;
+				const cross = (200 + Math.random() * 200) * pace;
+				const hold2 = (300 + Math.random() * 300) * pace;
+				const snap2 = (160 + Math.random() * 140) * pace;
+				// Pre-compute phase endpoints
+				slot.p1 = snap1;
+				slot.p2 = snap1 + hold1;
+				slot.p3 = snap1 + hold1 + cross;
+				slot.p4 = snap1 + hold1 + cross + hold2;
+				slot.p5 = snap1 + hold1 + cross + hold2 + snap2;
 			}
 
 			// Active slot — animate the shuffle
@@ -830,7 +865,6 @@ export class Swarm {
 				if (!isSettled) {
 					this.dest[slot.index].x = slot.baseX;
 					this.dest[slot.index].y = slot.baseY;
-					activeIndices.delete(slot.index);
 					slot.index = -1;
 					slot.cooldown = 8000 + Math.random() * 10000;
 					continue;
@@ -839,37 +873,31 @@ export class Swarm {
 				const t = slot.timer;
 				slot.timer += ms;
 
-				const p1 = slot.snap1;
-				const p2 = p1 + slot.hold1;
-				const p3 = p2 + slot.cross;
-				const p4 = p3 + slot.hold2;
-				const p5 = p4 + slot.snap2;
-
 				let offset = 0;
-				if (t < p1) {
-					offset = -easeOutBack(t / slot.snap1);
-				} else if (t < p2) {
+				if (t < slot.p1) {
+					offset = -_easeOutBack(t / slot.p1);
+				} else if (t < slot.p2) {
 					offset = -1;
-				} else if (t < p3) {
-					offset = -1 + 2 * easeOutBack((t - p2) / slot.cross);
-				} else if (t < p4) {
+				} else if (t < slot.p3) {
+					offset = -1 + 2 * _easeOutBack((t - slot.p2) / (slot.p3 - slot.p2));
+				} else if (t < slot.p4) {
 					offset = 1;
-				} else if (t < p5) {
-					offset = 1 - easeOutBack((t - p4) / slot.snap2);
+				} else if (t < slot.p5) {
+					offset = 1 - _easeOutBack((t - slot.p4) / (slot.p5 - slot.p4));
 				}
 				offset *= slot.dir;
 
-				if (t >= p5) {
+				if (t >= slot.p5) {
 					this.sprites[slot.index].x = slot.baseX;
 					this.sprites[slot.index].y = slot.baseY;
 					this.dest[slot.index].x = slot.baseX;
 					this.dest[slot.index].y = slot.baseY;
-					activeIndices.delete(slot.index);
 					slot.index = -1;
 					slot.cooldown = 8000 + Math.random() * 10000;
 				} else {
-					this.sprites[slot.index].x = slot.baseX + perpX * offset * slot.dist;
-					this.sprites[slot.index].y = slot.baseY + perpY * offset * slot.dist;
+					const d = offset * slot.dist;
+					this.sprites[slot.index].x = slot.baseX + cosA * d;
+					this.sprites[slot.index].y = slot.baseY + sinA * d;
 					this.dest[slot.index].x = this.sprites[slot.index].x;
 					this.dest[slot.index].y = this.sprites[slot.index].y;
 				}
