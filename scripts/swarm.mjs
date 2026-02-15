@@ -152,6 +152,7 @@ export class Swarm {
 		this._isTeleport =
 			!this.isTile && CONFIG.Token.movement.actions[this.document.movementAction]?.teleport;
 		this._localSize = { w: 0, h: 0, scaleX: 0, scaleY: 0 };
+		this._scaleCompensation = 1;
 
 		if (!object.swarmMesh) {
 			object.swarmMesh = new SwarmMesh(object, document);
@@ -230,6 +231,11 @@ export class Swarm {
 		this._localSize.h = (this.isTile ? this.object.bounds.height : this.object.h) / scaleY;
 		this._localSize.scaleX = scaleX;
 		this._localSize.scaleY = scaleY;
+
+		// Cache scale compensation so move() and destination methods don't recompute per tick.
+		const docScaleX = Math.abs(this.object?.document?.texture?.scaleX ?? 1);
+		const docScaleY = Math.abs(this.object?.document?.texture?.scaleY ?? docScaleX);
+		this._scaleCompensation = 1 / Math.max(0.01, (docScaleX + docScaleY) / 2);
 	}
 
 	/**
@@ -741,12 +747,17 @@ export class Swarm {
 	randSquare(ms) {
 		const { w: localW, h: localH } = this._getLocalSize();
 
+		// Scale the "too far" threshold so it accounts for the larger local coordinate
+		// space at small document texture scales, preventing constant destination reassignment.
+		const gamma = GAMMA * this._scaleCompensation;
+		const gammaSq = gamma * gamma;
+
 		for (let i = 0; i < this.sprites.length; ++i) {
 			const s = this.sprites[i];
 			const dx = this.dest[i].x - s.x;
 			const dy = this.dest[i].y - s.y;
 			const lenSq = dx * dx + dy * dy;
-			if (lenSq < SIGMA * SIGMA || lenSq > GAMMA * GAMMA) {
+			if (lenSq < SIGMA * SIGMA || lenSq > gammaSq) {
 				this.dest[i].x = Math.random() * localW - localW / 2;
 				this.dest[i].y = Math.random() * localH - localH / 2;
 			}
@@ -826,6 +837,7 @@ export class Swarm {
 	move(ms) {
 		// Base desired world speed (pixels per millisecond) *before per-sprite variation.
 		const BASE_WORLD_SPEED_PX_PER_MS = 0.3;
+		const scaleCompensation = this._scaleCompensation;
 		for (let i = 0; i < this.sprites.length; ++i) {
 			const sprite = this.sprites[i];
 			const dest = this.dest[i];
@@ -834,7 +846,7 @@ export class Swarm {
 			const distSq = dx * dx + dy * dy;
 			if (distSq > THETA) {
 				const dist = Math.sqrt(distSq);
-				const speed = BASE_WORLD_SPEED_PX_PER_MS * this.speeds[i] * ms;
+				const speed = BASE_WORLD_SPEED_PX_PER_MS * this.speeds[i] * ms * scaleCompensation;
 				if (speed * speed >= distSq) {
 					sprite.x = dest.x;
 					sprite.y = dest.y;
