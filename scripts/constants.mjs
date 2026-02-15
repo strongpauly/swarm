@@ -3,8 +3,6 @@ export const LOCALIZATION_ROOT = "SWARM";
 export const SWARM_FLAG = "isSwarm";
 export const SWARM_SIZE_FLAG = "swarmSize";
 export const SWARM_SPEED_FLAG = "swarmSpeed";
-export const SWARM_IMAGE_FLAG = "swarmImage";
-
 export const ANIM_TYPE_FLAG = "animation";
 export const ANIM_TYPE_CIRCULAR = "circular";
 export const ANIM_TYPE_RAND_SQUARE = "random";

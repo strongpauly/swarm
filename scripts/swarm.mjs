@@ -35,7 +35,6 @@ import {
 	SWARM_SPEED_FLAG,
 	THETA
 } from "./constants.mjs";
-import * as utils from "./utils.mjs";
 
 let swarm_socket;
 Hooks.once("socketlib.ready", () => {
