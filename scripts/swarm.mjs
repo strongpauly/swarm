@@ -167,6 +167,8 @@ export class Swarm {
 		this.dest = [];
 		this.speeds = [];
 		this.offsets = [];
+		this.cosOffsets = [];
+		this.sinOffsets = [];
 		this.waiting = [];
 		this.isTile = object instanceof foundry.canvas.placeables.Tile;
 
@@ -293,7 +295,10 @@ export class Swarm {
 			// waiting times, only used for stop-move
 			this.waiting.push(0);
 			// Random offset
-			this.offsets.push(Math.random() * 97);
+			const offset = Math.random() * 97;
+			this.offsets.push(offset);
+			this.cosOffsets.push(Math.cos(offset));
+			this.sinOffsets.push(Math.sin(offset));
 			// Pick an image from the list at random
 			let img = images[Math.floor(Math.random() * images.length)];
 			const sprite = PIXI.Sprite.from(img);
@@ -366,47 +371,35 @@ export class Swarm {
 		return this._fadeTime == 0 ? count : (ms * count) / (this._fadeTime * 1000);
 	}
 
-	#getScale(sprite) {
-		if (!sprite?.texture?.valid) return;
-
-		// 1) Texture dimensions (protect against zero)
-		const texW = Math.max(1, sprite.texture.width);
-		const texH = Math.max(1, sprite.texture.height);
-		const smax = Math.max(texW, texH);
-
-		// 2) Set DESIRED_WORLD_SIZE_PX to the canvas grid size.
-		const DESIRED_WORLD_SIZE_PX = this._gridSize;
-
-		// 3) The base scale that would make the texture's largest side equal DESIRED_WORLD_SIZE_PX.
-		const baseScale = DESIRED_WORLD_SIZE_PX / smax;
-
-		// 4) Token scale (the only thing we want to *allow* to change sprite size).
+	/**
+	 * Recompute the scale factor that is shared across all sprites (doc scale / container scale).
+	 * Call once per frame before #getScale.
+	 */
+	#updateScaleBase() {
 		let docScaleX = this.object?.document?.texture?.scaleX ?? 1;
 		let docScaleY = this.object?.document?.texture?.scaleY ?? docScaleX;
-
-		// 4.5) Square docScale to allow for greater range of values.
 		if (docScaleX < 1 || docScaleY < 1) {
 			docScaleX = docScaleX * docScaleX;
 			docScaleY = docScaleY * docScaleY;
 		}
-
-		// 5) The scale already applied by the container / object mesh that we must undo.
-		//    This is typically the mesh/container scale that Foundry assigns.
 		const containerScaleX = (this.object?.mesh?.scale?.x ?? 1) || 1;
 		const containerScaleY = (this.object?.mesh?.scale?.y ?? containerScaleX) || 1;
-
-		// Defensive guards (avoid division by zero)
 		const safeContainerX = Math.abs(containerScaleX) > 1e-6 ? containerScaleX : 1;
 		const safeContainerY = Math.abs(containerScaleY) > 1e-6 ? containerScaleY : 1;
+		this._scaleBaseX = docScaleX / safeContainerX;
+		this._scaleBaseY = docScaleY / safeContainerY;
+	}
 
-		// 6) Final per-axis sprite-local scale:
-		//    baseScale   -> makes texture fit desired world size
-		//    * docScale  -> allow object.document.scale to affect final visual size
-		//    / container -> undo already-applied container scaling
-		const finalX = baseScale * (docScaleX / safeContainerX);
-		const finalY = baseScale * (docScaleY / safeContainerY);
+	#getScale(sprite) {
+		if (!sprite?.texture?.valid) return;
 
-		// 7) Clamps so extremely tiny/huge textures don't produce absurd values.
+		const texW = Math.max(1, sprite.texture.width);
+		const texH = Math.max(1, sprite.texture.height);
+		const baseScale = this._gridSize / Math.max(texW, texH);
+
+		const finalX = baseScale * this._scaleBaseX;
+		const finalY = baseScale * this._scaleBaseY;
+
 		const MIN = 1e-4;
 		const MAX = 100;
 		return {
@@ -449,8 +442,7 @@ export class Swarm {
 				const scaleY = this.layer.scale.y || 1;
 				const localOffsetX = -worldDeltaX / scaleX;
 				const localOffsetY = -worldDeltaY / scaleY;
-
-				for (let i = 0; i < this.sprites.length; ++i) {
+				for (let i = this._visibleStart; i < this.sprites.length; ++i) {
 					this.sprites[i].x += localOffsetX;
 					this.sprites[i].y += localOffsetY;
 				}
@@ -459,7 +451,8 @@ export class Swarm {
 		this.lastWorldPos.x = curX;
 		this.lastWorldPos.y = curY;
 
-		let updateSprites = this.tint != this.document.texture.tint;
+		const newTint = this.document.texture.tint;
+		let updateSprites = this.tint !== newTint;
 
 		const currentHPPercent = this.calculateHPPercent();
 		if (currentHPPercent !== this.currentHPPercent || !this.created) {
@@ -488,6 +481,10 @@ export class Swarm {
 			}
 		}
 
+		// Compute values shared by all per-sprite methods once per frame
+		this._visibleStart = Math.round(this.maxSprites - this.visible);
+		this.#updateScaleBase();
+
 		if (!updateSprites && this.sprites.length) {
 			if (typeof this.scale === "undefined") {
 				updateSprites = true;
@@ -498,24 +495,23 @@ export class Swarm {
 		}
 
 		if (updateSprites && this.sprites.length > 0) {
-			const remaining = Math.round(this.maxSprites - this.visible);
+			const fadedAlpha = this.faded && this._isGM ? 0.2 : 0;
 
 			this.scale = this.#getScale(this.sprites[0]);
-			let getScale = () => this.scale;
-			if (this.useRandomImage) {
-				// Calculate scale for each sprite
-				getScale = (sprite) => this.#getScale(sprite);
-			}
+			const useRandom = this.useRandomImage;
 
 			for (let i = 0; i < this.sprites.length; ++i) {
 				const sprite = this.sprites[i];
-				sprite.alpha = i >= remaining ? 1 : this.faded && this._isGM ? 0.2 : 0;
-				const scale = getScale(sprite);
+				sprite.alpha = i >= this._visibleStart ? 1 : fadedAlpha;
+				const scale = useRandom ? this.#getScale(sprite) : this.scale;
 				if (scale) {
 					sprite.scale.set(scale.x, scale.y);
 				}
-				if (this.document.texture.tint) {
-					this.tint = sprite.tint = this.document.texture.tint;
+			}
+			if (newTint) {
+				this.tint = newTint;
+				for (let i = 0; i < this.sprites.length; ++i) {
+					this.sprites[i].tint = newTint;
 				}
 			}
 		}
@@ -654,16 +650,37 @@ export class Swarm {
 	skitter(ms) {
 		this.stopMoveStop(ms);
 
-		// See if there are pcs that we should stick to.
-		const pcs = canvas.tokens.placeables.filter((t) => t.actor.hasPlayerOwner);
-		if (!pcs.length) return;
+		// Build PC data without allocating new arrays each frame
+		const placeables = canvas.tokens.placeables;
+		let pcCount = 0;
+		if (!this._skitterPcp) {
+			this._skitterPcp = [];
+			this._skitterOcc = [];
+		}
+		const pcp = this._skitterPcp;
+		const occ = this._skitterOcc;
+		for (let j = 0; j < placeables.length; ++j) {
+			const t = placeables[j];
+			if (t.actor?.hasPlayerOwner) {
+				const center = t.center;
+				if (pcCount < pcp.length) {
+					pcp[pcCount].x = center.x;
+					pcp[pcCount].y = center.y;
+				} else {
+					pcp.push({ x: center.x, y: center.y });
+				}
+				occ[pcCount] = (0.55 * t.w) ** 2;
+				pcCount++;
+			}
+		}
+		if (!pcCount) return;
+		// Truncate to release stale references when PCs leave
+		pcp.length = pcCount;
+		occ.length = pcCount;
 
-		const pcp = pcs.map((t) => t.center);
-		const occ = pcs.map((t) => (0.55 * t.w) ** 2);
 		const centerX = this.object.center.x;
 		const centerY = this.object.center.y;
-
-		for (let i = 0; i < this.sprites.length; ++i) {
+		for (let i = this._visibleStart; i < this.sprites.length; ++i) {
 			const s = this.sprites[i];
 			// sprite's global position: convert from center-relative local -> global using object.center
 			const spx = s.x + centerX;
@@ -672,7 +689,7 @@ export class Swarm {
 			// Find nearest PC (inline argMin)
 			let smallest = 0;
 			let smallestDist2 = (spx - pcp[0].x) ** 2 + (spy - pcp[0].y) ** 2;
-			for (let j = 1; j < pcp.length; ++j) {
+			for (let j = 1; j < pcCount; ++j) {
 				const d2 = (spx - pcp[j].x) ** 2 + (spy - pcp[j].y) ** 2;
 				if (d2 < smallestDist2) {
 					smallestDist2 = d2;
@@ -701,8 +718,7 @@ export class Swarm {
 
 	stopMoveStop(ms) {
 		const { w: localW, h: localH } = this._getLocalSize();
-
-		for (let i = 0; i < this.sprites.length; ++i) {
+		for (let i = this._visibleStart; i < this.sprites.length; ++i) {
 			const s = this.sprites[i];
 			const dx = this.dest[i].x - s.x;
 			const dy = this.dest[i].y - s.y;
@@ -941,8 +957,7 @@ export class Swarm {
 		// space at small document texture scales, preventing constant destination reassignment.
 		const gamma = GAMMA * this._scaleCompensation;
 		const gammaSq = gamma * gamma;
-
-		for (let i = 0; i < this.sprites.length; ++i) {
+		for (let i = this._visibleStart; i < this.sprites.length; ++i) {
 			const s = this.sprites[i];
 			const dx = this.dest[i].x - s.x;
 			const dy = this.dest[i].y - s.y;
@@ -959,44 +974,24 @@ export class Swarm {
 	 * @param {number} ms - Milliseconds elapsed since the last frame.
 	 */
 	spiral(ms) {
-		// Update a shared time variable for the animation.
-		// 'ms / 30' scales the time progression.
 		this.t += ms / 30;
 
-		// Get the local dimensions of the swarm's bounding box.
 		const { w: localW, h: localH } = this._getLocalSize();
-
-		// Calculate the x and y radii for the spiral, based on the bounding box size.
 		const rx = 0.5 * localW;
 		const ry = 0.5 * localH;
-
-		// Loop through each sprite to calculate its next destination.
-		for (let i = 0; i < this.sprites.length; ++i) {
-			// Calculate a unique time-based value for this sprite.
-			// This uses the sprite's individual speed and a random offset to
-			// make each sprite's movement slightly different.
+		const invTwoE = 1 / (2 * Math.E);
+		for (let i = this._visibleStart; i < this.sprites.length; ++i) {
 			const t = this.speeds[i] * this.t * 0.002 + this.offsets[i];
 
-			// Determine the sprite's position on a flattened ellipse.
-			// 'y' is scaled by 0.4, making the ellipse wider than it is tall.
 			const x = Math.cos(t);
 			const y = 0.4 * Math.sin(t);
 
-			// Calculate a rotation angle for the entire elliptical path.
-			// This makes the whole spiral appear to rotate over time.
-			const angle = t / (2 * Math.E);
-			const ci = Math.cos(angle); // cosine of the rotation angle
-			const si = Math.sin(angle); // sine of the rotation angle
+			const angle = t * invTwoE;
+			const ci = Math.cos(angle);
+			const si = Math.sin(angle);
 
-			// Apply the rotation to the sprite's elliptical coordinates and scale by the radii.
-			// This is a standard 2D rotation transformation.
-			const final_x = rx * x * ci - ry * y * si;
-			const final_y = rx * x * si + ry * y * ci;
-
-			// Set the calculated position as the new destination for this sprite.
-			// The separate `move()` function will handle the animation toward this point.
-			this.dest[i].x = final_x;
-			this.dest[i].y = final_y;
+			this.dest[i].x = rx * x * ci - ry * y * si;
+			this.dest[i].y = rx * x * si + ry * y * ci;
 		}
 	}
 
@@ -1006,46 +1001,43 @@ export class Swarm {
 
 		const _rx = 0.5 * localW;
 		const _ry = 0.5 * localH;
-
-		for (let i = 0; i < this.sprites.length; ++i) {
+		for (let i = this._visibleStart; i < this.sprites.length; ++i) {
 			const t = this.t * 0.002 + this.offsets[i];
 			const rY = 0.5 + 0.5 * (Math.sin(t * 0.3) + 0.3 * Math.sin(2 * t + 0.8) + 0.26 * Math.sin(3 * t + 0.8));
-			const x = Math.cos(t * this.speeds[i]);
-			const y = rY * Math.sin(t * this.speeds[i]);
+			const ts = t * this.speeds[i];
+			const x = Math.cos(ts);
+			const y = rY * Math.sin(ts);
 
-			const ci = Math.cos(this.offsets[i]);
-			const si = Math.sin(this.offsets[i]);
+			const ci = this.cosOffsets[i];
+			const si = this.sinOffsets[i];
 
-			const final_x = _rx * x * ci - _ry * y * si;
-			const final_y = _rx * x * si + _ry * y * ci;
-
-			this.dest[i].x = final_x;
-			this.dest[i].y = final_y;
+			this.dest[i].x = _rx * x * ci - _ry * y * si;
+			this.dest[i].y = _rx * x * si + _ry * y * ci;
 		}
 	}
 
 	move(ms) {
-		// Base desired world speed (pixels per millisecond) *before per-sprite variation.
 		const BASE_WORLD_SPEED_PX_PER_MS = 0.3;
 		const scaleCompensation = this._scaleCompensation;
-		for (let i = 0; i < this.sprites.length; ++i) {
+		const halfPi = -Math.PI / 2;
+		for (let i = this._visibleStart; i < this.sprites.length; ++i) {
 			const sprite = this.sprites[i];
 			const dest = this.dest[i];
 			const dx = dest.x - sprite.x;
 			const dy = dest.y - sprite.y;
 			const distSq = dx * dx + dy * dy;
 			if (distSq > THETA) {
-				const dist = Math.sqrt(distSq);
 				const speed = BASE_WORLD_SPEED_PX_PER_MS * this.speeds[i] * ms * scaleCompensation;
 				if (speed * speed >= distSq) {
 					sprite.x = dest.x;
 					sprite.y = dest.y;
 				} else {
+					const dist = Math.sqrt(distSq);
 					const factor = speed / dist;
 					sprite.x += dx * factor;
 					sprite.y += dy * factor;
 				}
-				sprite.rotation = -Math.PI / 2 + Math.atan2(dy, dx);
+				sprite.rotation = halfPi + Math.atan2(dy, dx);
 			}
 		}
 	}
