@@ -605,13 +605,14 @@ export class Swarm {
 	 */
 	hide(hidden) {
 		this.faded = hidden;
-		// Clear step to be recalcuated on next tick
-		this.step = null;
 		if (hidden) {
 			this.number = 0;
 		} else {
 			this.number = this.determineVisibleSprites(this.currentHPPercent, this.maxSprites);
 		}
+		// Apply immediately — no gradual fade for hide/show toggle
+		this.visible = this.number;
+		this.step = null;
 	}
 
 	/**
