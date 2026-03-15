@@ -113,7 +113,27 @@ function _easeOutBack(p) {
 	return 1 + 1.4 * q * q * q + q * q;
 }
 
+/**
+ * Whether Foundry v14+ API is available.
+ */
+const IS_V14 = !!foundry.canvas?.primary?.PrimaryCanvasContainer;
+
 class SwarmMesh extends PrimarySpriteMesh {
+	constructor(object, document) {
+		if (IS_V14) {
+			// v14: PrimarySpriteMesh expects {name, object, texture, shaderClass}
+			super({
+				object,
+				name: `swarm.${object.objectId ?? object.id}`,
+				texture: object.texture ?? PIXI.Texture.EMPTY
+			});
+		} else {
+			super(object, document);
+		}
+		// Prevent culling from skipping child rendering when the mesh itself draws nothing
+		this.cullable = false;
+	}
+
 	_render(_renderer) {
 		// Base Sprite shouldn't be rendered
 	}
@@ -155,8 +175,7 @@ export class Swarm {
 		this._gridSize = game.canvas.grid.size;
 		this._fadeTime = game.settings.get(MOD_NAME, SETTING_FADE_TIME);
 		this._stopTime = game.settings.get(MOD_NAME, SETTING_STOP_TIME);
-		this._isTeleport =
-			!this.isTile && CONFIG.Token.movement.actions[this.document.movementAction]?.teleport;
+		this._isTeleport = !this.isTile && CONFIG.Token.movement.actions[this.document.movementAction]?.teleport;
 		this._localSize = { w: 0, h: 0, scaleX: 0, scaleY: 0 };
 		this._scaleCompensation = 1;
 
@@ -184,6 +203,9 @@ export class Swarm {
 		if (!canvas.primary.children.includes(object.swarmMesh)) {
 			canvas.primary.addChild(object.swarmMesh);
 		}
+		// Update the Map entry so the tracked mesh has a valid parent/transform
+		const meshMap = this.isTile ? canvas.primary.tiles : canvas.primary.tokens;
+		if (meshMap) meshMap.set(object.objectId, object.swarmMesh);
 		object.swarm = this;
 
 		// this.randomRotation = true;
@@ -619,6 +641,13 @@ export class Swarm {
 		canvas.primary.removeChild(this.object.mesh);
 		this.object.mesh = this.object.originalMesh;
 		canvas.primary.addChild(this.object.mesh);
+		// Restore the Map entry so tracked mesh has a valid parent/transform
+		const objectId = this.object.objectId;
+		if (this.isTile) {
+			if (canvas.primary.tiles) canvas.primary.tiles.set(objectId, this.object.mesh);
+		} else {
+			if (canvas.primary.tokens) canvas.primary.tokens.set(objectId, this.object.mesh);
+		}
 		this.object.refresh();
 	}
 
