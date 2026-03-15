@@ -788,45 +788,75 @@ export class Swarm {
 
 		// Check active shuffle indices directly from slots (avoids Set allocation)
 		// Assign each sprite to the nearest available grid position
+		// Visible sprites get front positions, invisible sprites get the rest
 		for (let i = 0; i < n; ++i) assigned[i] = false;
 		let settledCount = 0;
-		for (let i = 0; i < n; ++i) {
-			const sprite = this.sprites[i];
-			let bestIdx = -1;
-			let bestDistSq = Infinity;
-			for (let j = 0; j < n; ++j) {
-				if (assigned[j]) continue;
-				const dx = gridPositions[j].x - sprite.x;
-				const dy = gridPositions[j].y - sprite.y;
-				const distSq = dx * dx + dy * dy;
-				if (distSq < bestDistSq) {
-					bestDistSq = distSq;
-					bestIdx = j;
-				}
-			}
-			assigned[bestIdx] = true;
-			gridAssignments[i] = bestIdx;
+		const visibleCount = Math.round(this.visible);
+		const backStart = Math.max(0, n - visibleCount);
 
-			// Skip normal destination for actively shuffling sprites
-			let isShuffling = false;
-			for (let s = 0; s < slots.length; ++s) {
-				if (slots[s].index === i) {
-					isShuffling = true;
-					break;
-				}
-			}
-			if (isShuffling) {
-				sprite.rotation = angle;
-				settledCount++;
-				continue;
-			}
+		// Two passes: visible sprites assigned to back (bottom/front-facing) grid positions first,
+		// then invisible sprites assigned to remaining top positions
+		for (let pass = 0; pass < 2; ++pass) {
+			for (let i = 0; i < n; ++i) {
+				const sprite = this.sprites[i];
+				const isVisible = sprite.alpha > 0;
+				if (pass === 0 && !isVisible) continue;
+				if (pass === 1 && isVisible) continue;
 
-			if (bestDistSq < SIGMA) {
-				sprite.rotation = angle;
-				settledCount++;
-			} else {
-				this.dest[i].x = gridPositions[bestIdx].x;
-				this.dest[i].y = gridPositions[bestIdx].y;
+				let bestIdx = -1;
+				let bestDistSq = Infinity;
+				const searchStart = pass === 0 ? backStart : 0;
+				const searchEnd = pass === 0 ? n : backStart;
+				for (let j = searchStart; j < searchEnd; ++j) {
+					if (assigned[j]) continue;
+					const dx = gridPositions[j].x - sprite.x;
+					const dy = gridPositions[j].y - sprite.y;
+					const distSq = dx * dx + dy * dy;
+					if (distSq < bestDistSq) {
+						bestDistSq = distSq;
+						bestIdx = j;
+					}
+				}
+				// If preferred range is full (e.g. GM view where all sprites have alpha > 0),
+				// spill into the complementary range
+				if (bestIdx === -1) {
+					const fallbackStart = pass === 0 ? 0 : backStart;
+					const fallbackEnd = pass === 0 ? backStart : n;
+					for (let j = fallbackStart; j < fallbackEnd; ++j) {
+						if (assigned[j]) continue;
+						const dx = gridPositions[j].x - sprite.x;
+						const dy = gridPositions[j].y - sprite.y;
+						const distSq = dx * dx + dy * dy;
+						if (distSq < bestDistSq) {
+							bestDistSq = distSq;
+							bestIdx = j;
+						}
+					}
+				}
+				assigned[bestIdx] = true;
+				gridAssignments[i] = bestIdx;
+
+				// Skip normal destination for actively shuffling sprites
+				let isShuffling = false;
+				for (let s = 0; s < slots.length; ++s) {
+					if (slots[s].index === i) {
+						isShuffling = true;
+						break;
+					}
+				}
+				if (isShuffling) {
+					sprite.rotation = angle;
+					settledCount++;
+					continue;
+				}
+
+				if (bestDistSq < SIGMA) {
+					sprite.rotation = angle;
+					settledCount++;
+				} else {
+					this.dest[i].x = gridPositions[bestIdx].x;
+					this.dest[i].y = gridPositions[bestIdx].y;
+				}
 			}
 		}
 
