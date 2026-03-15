@@ -799,7 +799,7 @@ export class Swarm {
 		for (let pass = 0; pass < 2; ++pass) {
 			for (let i = 0; i < n; ++i) {
 				const sprite = this.sprites[i];
-				const isVisible = sprite.alpha > 0;
+				const isVisible = sprite.alpha === 1;
 				if (pass === 0 && !isVisible) continue;
 				if (pass === 1 && isVisible) continue;
 
