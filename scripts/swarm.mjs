@@ -509,7 +509,9 @@ export class Swarm {
 
 			for (let i = 0; i < this.sprites.length; ++i) {
 				const sprite = this.sprites[i];
-				sprite.alpha = i >= remaining ? 1 : this.faded && this._isGM ? 0.2 : 0;
+				const hpVisible = i >= remaining;
+			const hpMissing = i < this.maxSprites - this.number;
+			sprite.alpha = hpVisible ? 1 : this.faded && this._isGM && !hpMissing ? 0.2 : 0;
 				const scale = getScale(sprite);
 				if (scale) {
 					sprite.scale.set(scale.x, scale.y);
