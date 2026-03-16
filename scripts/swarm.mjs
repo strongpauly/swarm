@@ -510,8 +510,8 @@ export class Swarm {
 			for (let i = 0; i < this.sprites.length; ++i) {
 				const sprite = this.sprites[i];
 				const hpVisible = i >= remaining;
-			const hpMissing = i < this.maxSprites - this.number;
-			sprite.alpha = hpVisible ? 1 : this.faded && this._isGM && !hpMissing ? 0.2 : 0;
+				const hpMissing = i < this.maxSprites - this.number;
+				sprite.alpha = hpVisible ? 1 : this.faded && this._isGM && !hpMissing ? 0.2 : 0;
 				const scale = getScale(sprite);
 				if (scale) {
 					sprite.scale.set(scale.x, scale.y);
@@ -605,14 +605,13 @@ export class Swarm {
 	 */
 	hide(hidden) {
 		this.faded = hidden;
+		// Clear step to be recalcuated on next tick
+		this.step = null;
 		if (hidden) {
 			this.number = 0;
 		} else {
 			this.number = this.determineVisibleSprites(this.currentHPPercent, this.maxSprites);
 		}
-		// Apply immediately — no gradual fade for hide/show toggle
-		this.visible = this.number;
-		this.step = null;
 	}
 
 	/**
