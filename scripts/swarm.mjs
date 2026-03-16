@@ -737,8 +737,10 @@ export class Swarm {
 	formSquare(ms) {
 		// Number of sprites
 		const n = this.sprites.length;
+		const visibleN = n - this._visibleStart;
+		if (visibleN <= 0) return;
 
-		// Compute a compact grid: cols x rows
+		// Compute a compact grid based on total count so cell size stays consistent as HP drops
 		const cols = Math.ceil(Math.sqrt(n));
 		const rows = Math.ceil(n / cols);
 
@@ -752,6 +754,10 @@ export class Swarm {
 		const cosA = Math.cos(angle);
 		const sinA = Math.sin(angle);
 
+		// Visible sprites fill a smaller grid anchored to the front (bottom rows before rotation)
+		const visibleRows = Math.ceil(visibleN / cols);
+		const rowOffset = rows - visibleRows;
+
 		// Reuse cached grid arrays — only reallocate when sprite count changes
 		if (!this._formGrid || this._formGrid.length !== n) {
 			this._formGrid = new Array(n);
@@ -761,30 +767,37 @@ export class Swarm {
 			this._formGridAngle = -Infinity;
 			this._formGridW = -1;
 			this._formGridH = -1;
+			this._formGridVisible = -1;
 		}
 		const gridPositions = this._formGrid;
 		const assigned = this._formAssigned;
 		const gridAssignments = this._formGridAssign;
 
-		// Recompute grid positions only when angle or dimensions change
-		if (angle !== this._formGridAngle || localW !== this._formGridW || localH !== this._formGridH) {
+		// Recompute grid positions when angle, dimensions, or visible count change
+		if (
+			angle !== this._formGridAngle ||
+			localW !== this._formGridW ||
+			localH !== this._formGridH ||
+			visibleN !== this._formGridVisible
+		) {
 			this._formGridAngle = angle;
 			this._formGridW = localW;
 			this._formGridH = localH;
-			for (let i = 0; i < n; ++i) {
+			this._formGridVisible = visibleN;
+			for (let i = 0; i < visibleN; ++i) {
 				const row = Math.floor(i / cols);
 				const indexInRow = i - row * cols;
-				const itemsInThisRow = row === rows - 1 ? n - (rows - 1) * cols : cols;
+				const itemsInThisRow = row === visibleRows - 1 ? visibleN - (visibleRows - 1) * cols : cols;
 				const rowOffsetX = (localW - itemsInThisRow * cellW) / 2;
 				const tx = rowOffsetX + (indexInRow + 0.5) * cellW - centerX;
-				const ty = (row + 0.5) * cellH - centerY;
+				const ty = (rowOffset + row + 0.5) * cellH - centerY;
 				gridPositions[i].x = tx * cosA - ty * sinA;
 				gridPositions[i].y = tx * sinA + ty * cosA;
 			}
 		}
 
 		// Initialize independent shuffle slots — each has its own cooldown so they never synchronize
-		const slotCount = Math.max(1, Math.floor(n / 12));
+		const slotCount = Math.max(1, Math.floor(visibleN / 12));
 		if (!this._formShuffleSlots) {
 			this._formShuffleSlots = [];
 			for (let j = 0; j < slotCount; j++) {
@@ -802,15 +815,22 @@ export class Swarm {
 			slots.push({ cooldown: 6000 + Math.random() * 12000, index: -1, timer: 0, baseX: 0, baseY: 0 });
 		}
 
-		// Check active shuffle indices directly from slots (avoids Set allocation)
-		// Assign each sprite to the nearest available grid position
-		for (let i = 0; i < n; ++i) assigned[i] = false;
+		// Cancel shuffle slots referencing now-hidden sprites
+		for (let s = 0; s < slots.length; ++s) {
+			if (slots[s].index >= 0 && slots[s].index < this._visibleStart) {
+				slots[s].index = -1;
+				slots[s].cooldown = 1000;
+			}
+		}
+
+		// Assign each visible sprite to the nearest available grid position
+		for (let i = 0; i < visibleN; ++i) assigned[i] = false;
 		let settledCount = 0;
-		for (let i = 0; i < n; ++i) {
+		for (let i = this._visibleStart; i < n; ++i) {
 			const sprite = this.sprites[i];
 			let bestIdx = -1;
 			let bestDistSq = Infinity;
-			for (let j = 0; j < n; ++j) {
+			for (let j = 0; j < visibleN; ++j) {
 				if (assigned[j]) continue;
 				const dx = gridPositions[j].x - sprite.x;
 				const dy = gridPositions[j].y - sprite.y;
@@ -847,7 +867,7 @@ export class Swarm {
 		}
 
 		// Process each shuffle slot independently
-		const isSettled = settledCount >= n * 0.8;
+		const isSettled = settledCount >= visibleN * 0.8;
 		const baseDist = Math.min(cellW, cellH);
 
 		for (let si = 0; si < slots.length; ++si) {
@@ -861,11 +881,11 @@ export class Swarm {
 				slot.cooldown -= ms;
 				if (slot.cooldown > 0) continue;
 
-				// Pick a random sprite not already shuffling via rejection sampling
+				// Pick a random visible sprite not already shuffling via rejection sampling
 				let idx;
-				let attempts = n;
+				let attempts = visibleN;
 				do {
-					idx = Math.floor(Math.random() * n);
+					idx = this._visibleStart + Math.floor(Math.random() * visibleN);
 					let taken = false;
 					for (let s = 0; s < slots.length; ++s) {
 						if (slots[s].index === idx) {
