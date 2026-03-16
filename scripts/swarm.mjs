@@ -790,7 +790,7 @@ export class Swarm {
 				const itemsInThisRow = row === visibleRows - 1 ? visibleN - (visibleRows - 1) * cols : cols;
 				const rowOffsetX = (localW - itemsInThisRow * cellW) / 2;
 				const tx = rowOffsetX + (indexInRow + 0.5) * cellW - centerX;
-				const ty = (rowOffset + row + 0.5) * cellH - centerY;
+				const ty = (rowOffset + (visibleRows - 1 - row) + 0.5) * cellH - centerY;
 				gridPositions[i].x = tx * cosA - ty * sinA;
 				gridPositions[i].y = tx * sinA + ty * cosA;
 			}
