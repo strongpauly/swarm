@@ -138,7 +138,7 @@ jobs:
 
             - name: Foundry Website Update
               id: foundry-website-update
-              uses: foundryvtt-dcc/foundry-package-release-action@main
+              uses: strongpauly/foundry-package-release-action@main
               with:
                   actionToken: ${{ secrets.GITHUB_TOKEN }}
                   manifestFileName: "module.json"
