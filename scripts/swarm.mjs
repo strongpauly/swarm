@@ -151,6 +151,19 @@ class SwarmMesh extends PrimarySpriteMesh {
 	}
 
 	set angle(_v) {}
+
+	// Prevent Foundry from hiding the container — visibility is handled per-sprite via alpha
+	get visible() {
+		return true;
+	}
+
+	set visible(_v) {}
+
+	get hidden() {
+		return false;
+	}
+
+	set hidden(_v) {}
 }
 
 export class Swarm {
@@ -161,7 +174,8 @@ export class Swarm {
 		this.document = document;
 		this.useRandomImage = this.object?.actor?.prototypeToken?.randomImg;
 		this.currentHPPercent = this.calculateHPPercent(); // Calculate current HP percent
-		this.number = this.determineVisibleSprites(this.currentHPPercent, number); // Determine initial number of visible sprites
+		this._hpVisibleCount = this.determineVisibleSprites(this.currentHPPercent, number); // HP-based visible count (ignoring hidden state)
+		this.number = this._hpVisibleCount; // Determine initial number of visible sprites
 		this.maxSprites = number; // Store the maximum number of sprites
 		this.sprites = [];
 		this.dest = [];
@@ -212,7 +226,11 @@ export class Swarm {
 
 		// this.randomRotation = true;
 		this.faded = document.hidden;
-		this.visible = this.faded ? 0 : this.number;
+		this._targetVisAlpha = this.faded ? (this._isGM ? 0.5 : 0) : 1;
+		this._spriteAlphas = new Float32Array(this.maxSprites);
+		this._spriteAlphas.fill(this._targetVisAlpha);
+		this._visTransition = null;
+		this.visible = this.number;
 
 		this.setElevation(document.elevation);
 		this.setSort(this.object.sort ?? 0);
@@ -278,8 +296,6 @@ export class Swarm {
 	}
 
 	async createSprites(number) {
-		const hidden = this.document.hidden;
-
 		let images = [];
 		if (this.useRandomImage) {
 			images = await swarm_socket.executeAsGM("wildcards", this.object.id);
@@ -308,7 +324,7 @@ export class Swarm {
 			sprite.x = Math.random() * localW - localW / 2;
 			sprite.y = Math.random() * localH - localH / 2;
 			// Hidden initially?
-			sprite.alpha = hidden ? 0 : 1;
+			sprite.alpha = this._spriteAlphas[i];
 
 			// Start off at scale 0 before image is loaded
 			sprite.scale.x = 0;
@@ -457,6 +473,7 @@ export class Swarm {
 		const currentHPPercent = this.calculateHPPercent();
 		if (currentHPPercent !== this.currentHPPercent || !this.created) {
 			this.currentHPPercent = currentHPPercent;
+			this._hpVisibleCount = this.determineVisibleSprites(currentHPPercent, this.maxSprites);
 			this.number = this.determineVisibleSprites(currentHPPercent, this.maxSprites);
 			this.step = this.determineStep(ms);
 			updateSprites = true;
@@ -485,6 +502,34 @@ export class Swarm {
 		this._visibleStart = Math.round(this.maxSprites - this.visible);
 		this.#updateScaleBase();
 
+		// Process one-at-a-time visibility transition
+		if (this._visTransition) {
+			const trans = this._visTransition;
+			trans.elapsed += ms;
+			updateSprites = true;
+
+			const totalTransTime = trans.perSpriteTime * trans.indices.length;
+			if (trans.elapsed >= totalTransTime) {
+				for (let i = 0; i < trans.indices.length; i++) {
+					this._spriteAlphas[trans.indices[i]] = trans.targetAlpha;
+				}
+				this._visTransition = null;
+			} else {
+				const spriteProgress = trans.elapsed / trans.perSpriteTime;
+				const doneCount = Math.floor(spriteProgress);
+				const currentFrac = spriteProgress - doneCount;
+
+				for (let i = 0; i < doneCount; i++) {
+					this._spriteAlphas[trans.indices[i]] = trans.targetAlpha;
+				}
+				if (doneCount < trans.indices.length) {
+					const idx = trans.indices[doneCount];
+					const start = trans.startAlphas[doneCount];
+					this._spriteAlphas[idx] = start + (trans.targetAlpha - start) * currentFrac;
+				}
+			}
+		}
+
 		if (!updateSprites && this.sprites.length) {
 			if (typeof this.scale === "undefined") {
 				updateSprites = true;
@@ -495,14 +540,12 @@ export class Swarm {
 		}
 
 		if (updateSprites && this.sprites.length > 0) {
-			const fadedAlpha = this.faded && this._isGM ? 0.2 : 0;
-
 			this.scale = this.#getScale(this.sprites[0]);
 			const useRandom = this.useRandomImage;
 
 			for (let i = 0; i < this.sprites.length; ++i) {
 				const sprite = this.sprites[i];
-				sprite.alpha = i >= this._visibleStart ? 1 : fadedAlpha;
+				sprite.alpha = i >= this._visibleStart ? this._spriteAlphas[i] : 0;
 				const scale = useRandom ? this.#getScale(sprite) : this.scale;
 				if (scale) {
 					sprite.scale.set(scale.x, scale.y);
@@ -599,13 +642,43 @@ export class Swarm {
 	 */
 	hide(hidden) {
 		this.faded = hidden;
-		// Clear step to be recalcuated on next tick
-		this.step = null;
-		if (hidden) {
-			this.number = 0;
-		} else {
-			this.number = this.determineVisibleSprites(this.currentHPPercent, this.maxSprites);
+		const newTarget = hidden ? (this._isGM ? 0.5 : 0) : 1;
+		this._targetVisAlpha = newTarget;
+
+		// Collect HP-visible sprites that need to transition
+		const hpCutoff = this.maxSprites - this._hpVisibleCount;
+		const indices = [];
+		const startAlphas = [];
+		for (let i = hpCutoff; i < this.maxSprites; i++) {
+			if (this._spriteAlphas[i] !== newTarget) {
+				indices.push(i);
+				startAlphas.push(this._spriteAlphas[i]);
+			}
 		}
+
+		if (indices.length === 0) return;
+
+		// When hiding, last sprite fades first; when showing, first sprite fades first
+		if (hidden) {
+			indices.reverse();
+			startAlphas.reverse();
+		}
+
+		if (this._fadeTime === 0) {
+			for (let i = 0; i < indices.length; i++) {
+				this._spriteAlphas[indices[i]] = newTarget;
+			}
+			this._visTransition = null;
+			return;
+		}
+
+		this._visTransition = {
+			indices,
+			startAlphas,
+			perSpriteTime: (this._fadeTime * 1000) / indices.length,
+			elapsed: 0,
+			targetAlpha: newTarget,
+		};
 	}
 
 	/**
@@ -1064,6 +1137,7 @@ export class Swarm {
 }
 
 function createSwarm(object) {
+	if (object.swarm?._visTransition) return;
 	object.swarm?.destroy();
 	if (!object.texture?.valid) {
 		return;
@@ -1281,6 +1355,10 @@ Hooks.once("init", () => {
 			if (!token.document.getFlag(MOD_NAME, SWARM_FLAG)) {
 				return token.originalMesh;
 			}
+			if (token.swarmMesh) {
+				if (!this.children.includes(token.swarmMesh)) this.addChild(token.swarmMesh);
+				return token.swarmMesh;
+			}
 			token.swarmMesh = new SwarmMesh(token, token.document);
 			this.addChild(token.swarmMesh);
 			return token.swarmMesh;
@@ -1296,6 +1374,10 @@ Hooks.once("init", () => {
 			tile.originalMesh = wrapped(tile);
 			if (!tile.document.getFlag(MOD_NAME, SWARM_FLAG)) {
 				return tile.originalMesh;
+			}
+			if (tile.swarmMesh) {
+				if (!this.children.includes(tile.swarmMesh)) this.addChild(tile.swarmMesh);
+				return tile.swarmMesh;
 			}
 			tile.swarmMesh = new SwarmMesh(tile, tile.document);
 			this.addChild(tile.swarmMesh);
