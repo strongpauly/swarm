@@ -238,12 +238,17 @@ export class Swarm {
 		this.created = false;
 
 		this.tick = new PIXI.Ticker();
-		const anim = document.getFlag(MOD_NAME, ANIM_TYPE_FLAG) ?? DEFAULT_ANIMATION;
-		this.setDestinations = this.circular;
+		this._animType = document.getFlag(MOD_NAME, ANIM_TYPE_FLAG) ?? DEFAULT_ANIMATION;
+		this._textureSrc = this.useRandomImage ? null : document.texture.src;
+		this._swarmSpeed = document.getFlag(MOD_NAME, SWARM_SPEED_FLAG) ?? DEFAULT_SWARM_SPEED;
+		this._applyAnimationType(this._animType);
+		this.tick.add(this.anim.bind(this));
+		this.tick.start();
+		Hooks.call("createSwarm", this);
+	}
+
+	_applyAnimationType(anim) {
 		switch (anim) {
-			case ANIM_TYPE_CIRCULAR:
-				this.setDestinations = this.circular;
-				break;
 			case ANIM_TYPE_RAND_SQUARE:
 				this.setDestinations = this.randSquare;
 				break;
@@ -258,12 +263,25 @@ export class Swarm {
 				break;
 			case ANIM_TYPE_FORMATION_SQUARE:
 				this.setDestinations = this.formSquare;
-				// this.randomRotation = false;
+				break;
+			default:
+				this.setDestinations = this.circular;
 				break;
 		}
-		this.tick.add(this.anim.bind(this));
-		this.tick.start();
-		Hooks.call("createSwarm", this);
+	}
+
+	_computeSpeed(anim, baseSpeed) {
+		let sf = baseSpeed;
+		switch (anim) {
+			case ANIM_TYPE_RAND_SQUARE:
+				sf *= 0.5;
+				break;
+			case ANIM_TYPE_CIRCULAR:
+			case ANIM_TYPE_SPIRAL:
+				sf *= 1.2;
+				break;
+		}
+		return sf * 5 + sf * Math.random() * 0.5;
 	}
 
 	/**
@@ -306,6 +324,7 @@ export class Swarm {
 		const anim = this.document.getFlag(MOD_NAME, ANIM_TYPE_FLAG) ?? DEFAULT_ANIMATION;
 
 		const { w: localW, h: localH } = this._getLocalSize();
+		const baseIndex = this.sprites.length;
 
 		for (let i = 0; i < number; ++i) {
 			// waiting times, only used for stop-move
@@ -324,7 +343,7 @@ export class Swarm {
 			sprite.x = Math.random() * localW - localW / 2;
 			sprite.y = Math.random() * localH - localH / 2;
 			// Hidden initially?
-			sprite.alpha = this._spriteAlphas[i];
+			sprite.alpha = this._spriteAlphas[baseIndex + i];
 
 			// Start off at scale 0 before image is loaded
 			sprite.scale.x = 0;
@@ -346,26 +365,7 @@ export class Swarm {
 			// Set the initial destination to its initial position
 			this.dest.push({ x: sprite.x, y: sprite.y });
 			this.sprites.push(sprite);
-			let sf = this.document.getFlag(MOD_NAME, SWARM_SPEED_FLAG) ?? DEFAULT_SWARM_SPEED;
-
-			switch (anim) {
-				case ANIM_TYPE_RAND_SQUARE:
-					sf *= 0.5;
-					break;
-				case ANIM_TYPE_CIRCULAR:
-				case ANIM_TYPE_SPIRAL:
-					sf *= 1.2;
-					break;
-				case ANIM_TYPE_SKITTER:
-				case ANIM_TYPE_STOPNMOVE:
-				case ANIM_TYPE_FORMATION_SQUARE:
-				default:
-					break;
-			}
-
-			// Add 50% of the speed as variability on each sprites speed
-			this.speeds.push(sf * 5 + sf * Math.random() * 0.5);
-			// Add this sprite to the SwarmMesh
+			this.speeds.push(this._computeSpeed(anim, this._swarmSpeed));
 			this.layer.addChild(sprite);
 		}
 	}
@@ -437,7 +437,8 @@ export class Swarm {
 		this._updateLocalSize();
 
 		if (!this.created) {
-			this.createSprites(this.maxSprites); // Use maxSprites instead of number
+			const remaining = this.maxSprites - this.sprites.length;
+			if (remaining > 0) this.createSprites(remaining);
 		}
 
 		t = Math.min(t, 2.0); // Cap frame skip to two frames
@@ -690,6 +691,81 @@ export class Swarm {
 
 	setSort(sort) {
 		this.layer.sort = sort;
+	}
+
+	/**
+	 * Update the swarm in-place from current document flags without destroying it.
+	 * Preserves visibility transition state, ticker, and mesh.
+	 */
+	update() {
+		const newSize = this.document.getFlag(MOD_NAME, SWARM_SIZE_FLAG) ?? DEFAULT_SWARM_SIZE;
+		const newAnim = this.document.getFlag(MOD_NAME, ANIM_TYPE_FLAG) ?? DEFAULT_ANIMATION;
+		const newSpeed = this.document.getFlag(MOD_NAME, SWARM_SPEED_FLAG) ?? DEFAULT_SWARM_SPEED;
+		const newTextureSrc = this.document.texture.src;
+
+		const sizeChanged = newSize !== this.maxSprites;
+		const animChanged = newAnim !== this._animType;
+		const speedChanged = newSpeed !== this._swarmSpeed;
+		const textureChanged = !this.useRandomImage && newTextureSrc !== this._textureSrc;
+
+		if (animChanged) {
+			this._animType = newAnim;
+			this._formGrid = null;
+			this._formShuffleSlots = null;
+			this._applyAnimationType(newAnim);
+		}
+
+		if (sizeChanged) {
+			const oldSize = this.maxSprites;
+			this.maxSprites = newSize;
+
+			if (newSize > oldSize) {
+				const newAlphas = new Float32Array(newSize);
+				newAlphas.set(this._spriteAlphas);
+				for (let i = oldSize; i < newSize; i++) newAlphas[i] = this._targetVisAlpha;
+				this._spriteAlphas = newAlphas;
+				// Triggers createSprites for remaining slots in anim()
+				this.created = false;
+			} else {
+				for (let i = newSize; i < oldSize; i++) {
+					if (this.sprites[i]) this.sprites[i].destroy();
+				}
+				this.sprites.length = newSize;
+				this.dest.length = newSize;
+				this.speeds.length = newSize;
+				this.offsets.length = newSize;
+				this.cosOffsets.length = newSize;
+				this.sinOffsets.length = newSize;
+				this.waiting.length = newSize;
+				this._spriteAlphas = this._spriteAlphas.slice(0, newSize);
+			}
+
+			this._hpVisibleCount = this.determineVisibleSprites(this.currentHPPercent, newSize);
+			this.number = this._hpVisibleCount;
+			this.visible = this.number;
+		}
+
+		if (animChanged || sizeChanged || speedChanged) {
+			this._swarmSpeed = newSpeed;
+			for (let i = 0; i < this.speeds.length; i++) {
+				this.speeds[i] = this._computeSpeed(newAnim, newSpeed);
+			}
+		}
+
+		if (textureChanged && this.sprites.length > 0) {
+			this._textureSrc = newTextureSrc;
+			const newTexture = PIXI.Texture.from(newTextureSrc);
+			for (const sprite of this.sprites) {
+				sprite.texture = newTexture;
+			}
+		}
+
+		if (sizeChanged && this._visTransition) {
+			for (let i = 0; i < this.maxSprites; i++) {
+				this._spriteAlphas[i] = this._targetVisAlpha;
+			}
+			this._visTransition = null;
+		}
 	}
 
 	destroy() {
@@ -1137,7 +1213,6 @@ export class Swarm {
 }
 
 function createSwarm(object) {
-	if (object.swarm?._visTransition) return;
 	object.swarm?.destroy();
 	if (!object.texture?.valid) {
 		return;
@@ -1169,8 +1244,10 @@ const swarmNeedsRefresh = (changes) => {
 Hooks.on("updateToken", (document, changes) => {
 	if (document.getFlag(MOD_NAME, SWARM_FLAG)) {
 		const swarm = document.object?.swarm;
-		if (!swarm || (swarmNeedsRefresh(changes) && document.object)) {
+		if (!swarm) {
 			createSwarm(document.object);
+		} else if (swarmNeedsRefresh(changes)) {
+			swarm.update();
 		} else {
 			if (changes.hidden != undefined) {
 				swarm.hide(changes.hidden);
@@ -1217,9 +1294,15 @@ Hooks.on(
 	 * @param {TokenRefreshOptions} changes
 	 */
 	function swarmsRefreshToken(token, changes) {
+		// Config dialog preview: hide the original's mesh so only the preview swarm is visible
+		if (token._original?.sheet?.rendered && token._original.swarmMesh) {
+			canvas.primary.removeChild(token._original.swarmMesh);
+		}
 		if (token.document.getFlag(MOD_NAME, SWARM_FLAG)) {
-			if (!token.swarm || changes.refreshMesh) {
+			if (!token.swarm) {
 				createSwarm(token);
+			} else if (changes.refreshMesh) {
+				token.swarm.update();
 			}
 		} else if (token.swarm && token.originalMesh) {
 			token.swarm.restoreOriginal();
@@ -1237,14 +1320,20 @@ Hooks.on(
 			canvas.primary.removeChild(token.mesh);
 		}
 		token.swarm?.destroy();
+		// Restore original's swarm mesh if this was a config dialog preview
+		if (token._original?.swarmMesh?.parent !== canvas.primary) {
+			canvas.primary.addChild(token._original.swarmMesh);
+		}
 	}
 );
 
 Hooks.on("updateTile", function updateTile(document, changes) {
 	if (document.getFlag(MOD_NAME, SWARM_FLAG)) {
 		const swarm = document.object?.swarm;
-		if (!swarm || (swarmNeedsRefresh(changes) && document.object)) {
+		if (!swarm) {
 			createSwarm(document.object);
+		} else if (swarmNeedsRefresh(changes)) {
+			swarm.update();
 		} else {
 			if (changes.hidden != undefined) {
 				swarm.hide(changes.hidden);
@@ -1283,8 +1372,10 @@ Hooks.on(
 	 */
 	function swarmsRefreshTile(tile, changes) {
 		if (tile.document.getFlag(MOD_NAME, SWARM_FLAG)) {
-			if (!tile.swarm || changes.refreshMesh) {
+			if (!tile.swarm) {
 				createSwarm(tile);
+			} else if (changes.refreshMesh) {
+				tile.swarm.update();
 			}
 		} else if (tile.swarm && tile.originalMesh) {
 			tile.swarm.restoreOriginal();
@@ -1355,6 +1446,7 @@ Hooks.once("init", () => {
 			if (!token.document.getFlag(MOD_NAME, SWARM_FLAG)) {
 				return token.originalMesh;
 			}
+			if (this.children.includes(token.originalMesh)) this.removeChild(token.originalMesh);
 			if (token.swarmMesh) {
 				if (!this.children.includes(token.swarmMesh)) this.addChild(token.swarmMesh);
 				return token.swarmMesh;
@@ -1375,6 +1467,7 @@ Hooks.once("init", () => {
 			if (!tile.document.getFlag(MOD_NAME, SWARM_FLAG)) {
 				return tile.originalMesh;
 			}
+			if (this.children.includes(tile.originalMesh)) this.removeChild(tile.originalMesh);
 			if (tile.swarmMesh) {
 				if (!this.children.includes(tile.swarmMesh)) this.addChild(tile.swarmMesh);
 				return tile.swarmMesh;
