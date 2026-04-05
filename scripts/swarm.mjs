@@ -119,6 +119,9 @@ function _easeOutBack(p) {
 const IS_V14 = !!foundry.canvas?.primary?.PrimaryCanvasContainer;
 
 class SwarmMesh extends PrimarySpriteMesh {
+	_visible = true;
+	_transitioning = false;
+
 	constructor(object, document) {
 		if (IS_V14) {
 			// v14: PrimarySpriteMesh expects {name, object, texture, shaderClass}
@@ -132,6 +135,16 @@ class SwarmMesh extends PrimarySpriteMesh {
 		}
 		// Prevent culling from skipping child rendering when the mesh itself draws nothing
 		this.cullable = false;
+	}
+
+	// Override visible so Foundry's vision/wall occlusion works normally,
+	// but stay visible during a GM hide/show transition.
+	get visible() {
+		return this._transitioning || this._visible;
+	}
+
+	set visible(v) {
+		this._visible = v;
 	}
 
 	_render(_renderer) {
@@ -151,19 +164,6 @@ class SwarmMesh extends PrimarySpriteMesh {
 	}
 
 	set angle(_v) {}
-
-	// Prevent Foundry from hiding the container — visibility is handled per-sprite via alpha
-	get visible() {
-		return true;
-	}
-
-	set visible(_v) {}
-
-	get hidden() {
-		return false;
-	}
-
-	set hidden(_v) {}
 }
 
 export class Swarm {
@@ -515,6 +515,7 @@ export class Swarm {
 					this._spriteAlphas[trans.indices[i]] = trans.targetAlpha;
 				}
 				this._visTransition = null;
+				this.layer._transitioning = false;
 			} else {
 				const spriteProgress = trans.elapsed / trans.perSpriteTime;
 				const doneCount = Math.floor(spriteProgress);
@@ -680,6 +681,7 @@ export class Swarm {
 			elapsed: 0,
 			targetAlpha: newTarget,
 		};
+		this.layer._transitioning = true;
 	}
 
 	/**
@@ -765,6 +767,7 @@ export class Swarm {
 				this._spriteAlphas[i] = this._targetVisAlpha;
 			}
 			this._visTransition = null;
+			this.layer._transitioning = false;
 		}
 	}
 
