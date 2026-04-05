@@ -119,6 +119,9 @@ function _easeOutBack(p) {
 const IS_V14 = !!foundry.canvas?.primary?.PrimaryCanvasContainer;
 
 class SwarmMesh extends PrimarySpriteMesh {
+	_visible = true;
+	_transitioning = false;
+
 	constructor(object, document) {
 		if (IS_V14) {
 			// v14: PrimarySpriteMesh expects {name, object, texture, shaderClass}
@@ -132,6 +135,16 @@ class SwarmMesh extends PrimarySpriteMesh {
 		}
 		// Prevent culling from skipping child rendering when the mesh itself draws nothing
 		this.cullable = false;
+	}
+
+	// Override visible so Foundry's vision/wall occlusion works normally,
+	// but stay visible during a GM hide/show transition.
+	get visible() {
+		return this._transitioning || this._visible;
+	}
+
+	set visible(v) {
+		this._visible = v;
 	}
 
 	_render(_renderer) {
@@ -151,19 +164,6 @@ class SwarmMesh extends PrimarySpriteMesh {
 	}
 
 	set angle(_v) {}
-
-	// Prevent Foundry from hiding the container — visibility is handled per-sprite via alpha
-	get visible() {
-		return true;
-	}
-
-	set visible(_v) {}
-
-	get hidden() {
-		return false;
-	}
-
-	set hidden(_v) {}
 }
 
 export class Swarm {
@@ -189,8 +189,6 @@ export class Swarm {
 		// Cache settings and lookups that don't change per frame
 		this._isGM = game.user.isGM;
 		this._gridSize = game.canvas.grid.size;
-		this._fadeTime = game.settings.get(MOD_NAME, SETTING_FADE_TIME);
-		this._stopTime = game.settings.get(MOD_NAME, SETTING_STOP_TIME);
 		this._isTeleport = !this.isTile && CONFIG.Token.movement.actions[this.document.movementAction]?.teleport;
 		this._localSize = { w: 0, h: 0, scaleX: 0, scaleY: 0 };
 		this._scaleCompensation = 1;
@@ -381,10 +379,18 @@ export class Swarm {
 		return Math.max(minSprites, Math.round(hpPercent * maxNumber));
 	}
 
+	static get _fadeTime() {
+		return game.settings.get(MOD_NAME, SETTING_FADE_TIME);
+	}
+
+	static get _stopTime() {
+		return game.settings.get(MOD_NAME, SETTING_STOP_TIME);
+	}
+
 	determineStep(ms) {
 		const count = Math.abs(this.visible - this.number);
 		// step, corresponding to the module setting "fade time", also, prevent division by zero
-		return this._fadeTime == 0 ? count : (ms * count) / (this._fadeTime * 1000);
+		return Swarm._fadeTime == 0 ? count : (ms * count) / (Swarm._fadeTime * 1000);
 	}
 
 	/**
@@ -515,6 +521,7 @@ export class Swarm {
 					this._spriteAlphas[trans.indices[i]] = trans.targetAlpha;
 				}
 				this._visTransition = null;
+				this.layer._transitioning = false;
 			} else {
 				const spriteProgress = trans.elapsed / trans.perSpriteTime;
 				const doneCount = Math.floor(spriteProgress);
@@ -665,7 +672,7 @@ export class Swarm {
 			startAlphas.reverse();
 		}
 
-		if (this._fadeTime === 0) {
+		if (Swarm._fadeTime === 0) {
 			for (let i = 0; i < indices.length; i++) {
 				this._spriteAlphas[indices[i]] = newTarget;
 			}
@@ -676,10 +683,11 @@ export class Swarm {
 		this._visTransition = {
 			indices,
 			startAlphas,
-			perSpriteTime: (this._fadeTime * 1000) / indices.length,
+			perSpriteTime: (Swarm._fadeTime * 1000) / indices.length,
 			elapsed: 0,
 			targetAlpha: newTarget,
 		};
+		this.layer._transitioning = true;
 	}
 
 	/**
@@ -765,6 +773,7 @@ export class Swarm {
 				this._spriteAlphas[i] = this._targetVisAlpha;
 			}
 			this._visTransition = null;
+			this.layer._transitioning = false;
 		}
 	}
 
@@ -875,7 +884,7 @@ export class Swarm {
 				if (this.waiting[i] <= 0) {
 					this.dest[i].x = Math.random() * localW - localW / 2;
 					this.dest[i].y = Math.random() * localH - localH / 2;
-					this.waiting[i] = Math.random() * this._stopTime * 1000;
+					this.waiting[i] = Math.random() * Swarm._stopTime * 1000;
 				} else {
 					this.waiting[i] -= ms;
 				}
