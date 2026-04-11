@@ -1330,7 +1330,7 @@ Hooks.on(
 		}
 		token.swarm?.destroy();
 		// Restore original's swarm mesh if this was a config dialog preview
-		if (token._original?.swarmMesh?.parent !== canvas.primary) {
+		if (token._original?.swarmMesh && token._original.swarmMesh.parent !== canvas.primary) {
 			canvas.primary.addChild(token._original.swarmMesh);
 		}
 	}
