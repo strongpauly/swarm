@@ -242,16 +242,12 @@ export class Swarm {
 
 		this.tick = new PIXI.Ticker();
 		this._animType = document.getFlag(MOD_NAME, ANIM_TYPE_FLAG) ?? DEFAULT_ANIMATION;
-		this._textureSrc = this.useRandomImage ? null : this._getTextureSrc();
+		this._textureSrc = this.useRandomImage ? null : document.texture.src;
 		this._swarmSpeed = document.getFlag(MOD_NAME, SWARM_SPEED_FLAG) ?? DEFAULT_SWARM_SPEED;
 		this._applyAnimationType(this._animType);
 		this.tick.add(this.anim.bind(this));
 		this.tick.start();
 		Hooks.call("createSwarm", this);
-	}
-
-	_getTextureSrc() {
-		return this.document.texture?.src || CONST.DEFAULT_TOKEN;
 	}
 
 	_applyAnimationType(anim) {
@@ -341,7 +337,7 @@ export class Swarm {
 		if (this.useRandomImage) {
 			images = await swarm_socket.executeAsGM("wildcards", this.object.id);
 		} else {
-			images.push(this._getTextureSrc());
+			images.push(this.document.texture.src);
 		}
 
 		const anim = this.document.getFlag(MOD_NAME, ANIM_TYPE_FLAG) ?? DEFAULT_ANIMATION;
@@ -734,7 +730,7 @@ export class Swarm {
 		const newSize = this.document.getFlag(MOD_NAME, SWARM_SIZE_FLAG) ?? DEFAULT_SWARM_SIZE;
 		const newAnim = this.document.getFlag(MOD_NAME, ANIM_TYPE_FLAG) ?? DEFAULT_ANIMATION;
 		const newSpeed = this.document.getFlag(MOD_NAME, SWARM_SPEED_FLAG) ?? DEFAULT_SWARM_SPEED;
-		const newTextureSrc = this._getTextureSrc();
+		const newTextureSrc = this.document.texture.src;
 
 		const sizeChanged = newSize !== this.maxSprites;
 		const animChanged = newAnim !== this._animType;
