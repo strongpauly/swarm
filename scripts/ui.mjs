@@ -114,7 +114,8 @@ function createCheckBox({ app, parent, data_name, title, hint }) {
 }
 
 const swarmsRenderConfig = (objectName) => (app, html, data, options) => {
-	if (!game.user.isGM) return;
+	const token = app.token ?? app.document;
+	if (!token?.isOwner) return;
 
 	const doc = app.element?.ownerDocument || document;
 
