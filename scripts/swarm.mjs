@@ -95,7 +95,7 @@ function getHealthEstimate(token) {
 				case "D35E":
 				case "wfrp4e":
 				default:
-					return hpValue / hpMax;
+					return hpMax === 0 ? 1 : hpValue / hpMax;
 				case "swade":
 					return hpMax === 0 ? 1 : Math.max(hpMax - hpValue, 0) / Math.max(hpMax, 1);
 			}
