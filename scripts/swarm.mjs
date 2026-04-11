@@ -190,8 +190,13 @@ export class Swarm {
 		this._isGM = game.user.isGM;
 		this._gridSize = game.canvas.grid.size;
 		this._isTeleport = !this.isTile && CONFIG.Token.movement.actions[this.document.movementAction]?.teleport;
-		this._localSize = { w: 0, h: 0, scaleX: 0, scaleY: 0 };
+		this._localSize = { w: 0, h: 0, scaleX: 0, scaleY: 0, anchorX: -1, anchorY: -1 };
 		this._scaleCompensation = 1;
+		// Center offset in local coordinates: accounts for mesh anchor so sprites are
+		// centered in the object regardless of whether the mesh is positioned at center
+		// (v13 tiles, tokens) or top-left (v14 tiles with anchor 0,0).
+		this._centerOffsetX = 0;
+		this._centerOffsetY = 0;
 
 		if (!object.swarmMesh) {
 			object.swarmMesh = new SwarmMesh(object, document);
@@ -290,11 +295,27 @@ export class Swarm {
 		const mesh = this.object?.mesh;
 		const scaleX = mesh?.scale?.x ?? 1;
 		const scaleY = mesh?.scale?.y ?? scaleX;
-		if (scaleX === this._localSize.scaleX && scaleY === this._localSize.scaleY) return;
+		const anchorX = mesh?.anchor?.x ?? 0;
+		const anchorY = mesh?.anchor?.y ?? 0;
+		if (
+			scaleX === this._localSize.scaleX &&
+			scaleY === this._localSize.scaleY &&
+			anchorX === this._localSize.anchorX &&
+			anchorY === this._localSize.anchorY
+		)
+			return;
 		this._localSize.w = (this.isTile ? this.object.bounds.width : this.object.w) / scaleX;
 		this._localSize.h = (this.isTile ? this.object.bounds.height : this.object.h) / scaleY;
 		this._localSize.scaleX = scaleX;
 		this._localSize.scaleY = scaleY;
+		this._localSize.anchorX = anchorX;
+		this._localSize.anchorY = anchorY;
+
+		// Compute center offset: when mesh anchor is (0.5,0.5) the mesh is centered on
+		// its position so sprites orbit (0,0). When anchor is (0,0) the mesh top-left is
+		// at its position, so sprites must orbit (localW/2, localH/2).
+		this._centerOffsetX = (0.5 - anchorX) * this._localSize.w;
+		this._centerOffsetY = (0.5 - anchorY) * this._localSize.h;
 
 		// Cache scale compensation so move() and destination methods don't recompute per tick.
 		const docScaleX = Math.abs(this.object?.document?.texture?.scaleX ?? 1);
@@ -338,8 +359,8 @@ export class Swarm {
 			sprite.anchor.set(0.5);
 
 			// Sprites initial position, a random position within this objects area
-			sprite.x = Math.random() * localW - localW / 2;
-			sprite.y = Math.random() * localH - localH / 2;
+			sprite.x = this._centerOffsetX + Math.random() * localW - localW / 2;
+			sprite.y = this._centerOffsetY + Math.random() * localH - localH / 2;
 			// Hidden initially?
 			sprite.alpha = this._spriteAlphas[baseIndex + i];
 
@@ -840,9 +861,9 @@ export class Swarm {
 		const centerY = this.object.center.y;
 		for (let i = this._visibleStart; i < this.sprites.length; ++i) {
 			const s = this.sprites[i];
-			// sprite's global position: convert from center-relative local -> global using object.center
-			const spx = s.x + centerX;
-			const spy = s.y + centerY;
+			// sprite's global position: convert from local -> global using object.center
+			const spx = s.x - this._centerOffsetX + centerX;
+			const spy = s.y - this._centerOffsetY + centerY;
 
 			// Find nearest PC (inline argMin)
 			let smallest = 0;
@@ -876,14 +897,16 @@ export class Swarm {
 
 	stopMoveStop(ms) {
 		const { w: localW, h: localH } = this._getLocalSize();
+		const cx = this._centerOffsetX;
+		const cy = this._centerOffsetY;
 		for (let i = this._visibleStart; i < this.sprites.length; ++i) {
 			const s = this.sprites[i];
 			const dx = this.dest[i].x - s.x;
 			const dy = this.dest[i].y - s.y;
 			if (dx * dx + dy * dy < SIGMA) {
 				if (this.waiting[i] <= 0) {
-					this.dest[i].x = Math.random() * localW - localW / 2;
-					this.dest[i].y = Math.random() * localH - localH / 2;
+					this.dest[i].x = cx + Math.random() * localW - localW / 2;
+					this.dest[i].y = cy + Math.random() * localH - localH / 2;
 					this.waiting[i] = Math.random() * Swarm._stopTime * 1000;
 				} else {
 					this.waiting[i] -= ms;
@@ -904,8 +927,8 @@ export class Swarm {
 
 		const angle = this.object.document.rotation * (Math.PI / 180);
 		const { w: localW, h: localH } = this._getLocalSize();
-		const centerX = localW / 2;
-		const centerY = localH / 2;
+		const halfW = localW / 2;
+		const halfH = localH / 2;
 
 		const cellW = localW / cols;
 		const cellH = localH / rows;
@@ -947,10 +970,10 @@ export class Swarm {
 				const indexInRow = i - row * cols;
 				const itemsInThisRow = row === visibleRows - 1 ? visibleN - (visibleRows - 1) * cols : cols;
 				const rowOffsetX = (localW - itemsInThisRow * cellW) / 2;
-				const tx = rowOffsetX + (indexInRow + 0.5) * cellW - centerX;
-				const ty = (rowOffset + (visibleRows - 1 - row) + 0.5) * cellH - centerY;
-				gridPositions[i].x = tx * cosA - ty * sinA;
-				gridPositions[i].y = tx * sinA + ty * cosA;
+				const tx = rowOffsetX + (indexInRow + 0.5) * cellW - halfW;
+				const ty = (rowOffset + (visibleRows - 1 - row) + 0.5) * cellH - halfH;
+				gridPositions[i].x = this._centerOffsetX + tx * cosA - ty * sinA;
+				gridPositions[i].y = this._centerOffsetY + tx * sinA + ty * cosA;
 			}
 		}
 
@@ -1130,6 +1153,8 @@ export class Swarm {
 
 	randSquare(ms) {
 		const { w: localW, h: localH } = this._getLocalSize();
+		const cx = this._centerOffsetX;
+		const cy = this._centerOffsetY;
 
 		// Scale the "too far" threshold so it accounts for the larger local coordinate
 		// space at small document texture scales, preventing constant destination reassignment.
@@ -1141,8 +1166,8 @@ export class Swarm {
 			const dy = this.dest[i].y - s.y;
 			const lenSq = dx * dx + dy * dy;
 			if (lenSq < SIGMA * SIGMA || lenSq > gammaSq) {
-				this.dest[i].x = Math.random() * localW - localW / 2;
-				this.dest[i].y = Math.random() * localH - localH / 2;
+				this.dest[i].x = cx + Math.random() * localW - localW / 2;
+				this.dest[i].y = cy + Math.random() * localH - localH / 2;
 			}
 		}
 	}
@@ -1157,6 +1182,8 @@ export class Swarm {
 		const { w: localW, h: localH } = this._getLocalSize();
 		const rx = 0.5 * localW;
 		const ry = 0.5 * localH;
+		const cx = this._centerOffsetX;
+		const cy = this._centerOffsetY;
 		const invTwoE = 1 / (2 * Math.E);
 		for (let i = this._visibleStart; i < this.sprites.length; ++i) {
 			const t = this.speeds[i] * this.t * 0.002 + this.offsets[i];
@@ -1168,8 +1195,8 @@ export class Swarm {
 			const ci = Math.cos(angle);
 			const si = Math.sin(angle);
 
-			this.dest[i].x = rx * x * ci - ry * y * si;
-			this.dest[i].y = rx * x * si + ry * y * ci;
+			this.dest[i].x = cx + rx * x * ci - ry * y * si;
+			this.dest[i].y = cy + rx * x * si + ry * y * ci;
 		}
 	}
 
@@ -1179,6 +1206,8 @@ export class Swarm {
 
 		const _rx = 0.5 * localW;
 		const _ry = 0.5 * localH;
+		const cx = this._centerOffsetX;
+		const cy = this._centerOffsetY;
 		for (let i = this._visibleStart; i < this.sprites.length; ++i) {
 			const t = this.t * 0.002 + this.offsets[i];
 			const rY = 0.5 + 0.5 * (Math.sin(t * 0.3) + 0.3 * Math.sin(2 * t + 0.8) + 0.26 * Math.sin(3 * t + 0.8));
@@ -1189,8 +1218,8 @@ export class Swarm {
 			const ci = this.cosOffsets[i];
 			const si = this.sinOffsets[i];
 
-			this.dest[i].x = _rx * x * ci - _ry * y * si;
-			this.dest[i].y = _rx * x * si + _ry * y * ci;
+			this.dest[i].x = cx + _rx * x * ci - _ry * y * si;
+			this.dest[i].y = cy + _rx * x * si + _ry * y * ci;
 		}
 	}
 
