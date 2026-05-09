@@ -151,6 +151,25 @@ class SwarmMesh extends PrimarySpriteMesh {
 		// Base Sprite shouldn't be rendered
 	}
 
+	// Foundry's Token#voidMesh calls mesh._renderVoid each frame to "punch out" the
+	// token's shape from the interface buffer so the combat turn marker shows only as
+	// a halo around the token. Our base sprite renders nothing, so without this the
+	// turn marker would cover the swarm sprites instead of sitting behind them.
+	_renderVoid(renderer) {
+		if (!this.visible || this.worldAlpha <= 0 || !this.renderable) return;
+		if (!this.object?.turnMarker) return;
+		const children = this.children;
+		for (let i = 0; i < children.length; i++) {
+			const sprite = children[i];
+			if (!(sprite instanceof PIXI.Sprite)) continue;
+			if (!sprite.visible || sprite.alpha <= 0 || !sprite.renderable) continue;
+			const originalBlendMode = sprite.blendMode;
+			sprite.blendMode = PIXI.BLEND_MODES.ERASE;
+			sprite._render(renderer);
+			sprite.blendMode = originalBlendMode;
+		}
+	}
+
 	// Override rotation and angle
 	// Swarms can't face a direction (except formSquare, but this is handled by the Swarm)
 	get rotation() {
