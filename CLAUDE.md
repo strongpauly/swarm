@@ -6,9 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Swarm is a Foundry Virtual Tabletop (VTT) module that renders animated swarms of sprites in place of a single token or tile. It uses PIXI.js v7 for rendering and integrates with Foundry's hooks, settings, and canvas systems.
 
-- **Foundry VTT v13 API**: https://foundryvtt.com/api/
+- **Foundry VTT v14 API**: https://foundryvtt.com/api/
 - **PIXI.js v7 API**: https://pixijs.download/v7.x/docs/index.html
-- Files under `./foundry/` contain Foundry's client-side JS for reference.
+- Files under `./foundry/v13` contain Foundry's v13 client-side JS for reference.
+- Files under `./foundry/v14` contain Foundry's v14 client-side JS for reference.
 
 ## Development
 
@@ -25,6 +26,7 @@ Prettier with: tabs, 120 char width, no trailing commas. VS Code is configured f
 ### Entry Points (`module.json`)
 
 Two ES modules are loaded by Foundry:
+
 - `scripts/swarm.mjs` — core swarm engine
 - `scripts/ui.mjs` — token/tile configuration UI
 
