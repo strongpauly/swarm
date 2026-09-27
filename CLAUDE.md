@@ -56,6 +56,10 @@ Injects swarm configuration controls (enabled, count, speed, animation type) int
 
 Flag names (`swarm.isSwarm`, `swarm.swarmSize`, `swarm.swarmSpeed`, `swarm.animation`), animation type enum, math constants (THETA, SIGMA, GAMMA), defaults, and settings keys.
 
+### scripts/settings.mjs
+
+`SettingsCache` — caches this module's setting values, because `game.settings.get` is too slow for the per-frame loop. Read settings with `SettingsCache.get(key)` and give each registration `onChange: SettingsCache.onChange(key)` so the cached value stays current.
+
 ### scripts/utils.mjs
 
 2D vector math (Vector class and standalone functions) and array utilities.
