@@ -444,8 +444,9 @@ export class Swarm {
 
 	determineStep(ms) {
 		const count = Math.abs(this.visible - this.number);
-		// step, corresponding to the module setting "fade time", also, prevent division by zero
-		return Swarm._fadeTime == 0 ? count : (ms * count) / (Swarm._fadeTime * 1000);
+		// step, corresponding to the module setting "fade time", also, prevent division by zero.
+		// Non-animated swarms change size all at once.
+		return Swarm._fadeTime == 0 || !Swarm._animate ? count : (ms * count) / (Swarm._fadeTime * 1000);
 	}
 
 	/**
