@@ -24,6 +24,7 @@ export const SETTING_HP_REDUCE_ATTRIBUTE_VALUE = "attributeHpValue";
 export const SETTING_HP_REDUCE_ATTRIBUTE_MAX = "attributeHpMax";
 export const SETTING_FADE_TIME = "fadeTime";
 export const SETTING_STOP_TIME = "stopTime";
+export const SETTING_ANIMATE = "animateSwarms";
 export const SETTING_MIGRATED_TO = "migratedTo";
 export const THETA = 0.01;
 export const SIGMA = 5;
