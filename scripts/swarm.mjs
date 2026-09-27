@@ -36,6 +36,7 @@ import {
 	SWARM_SPEED_FLAG,
 	THETA
 } from "./constants.mjs";
+import { SettingsCache } from "./settings.mjs";
 
 let swarm_socket;
 Hooks.once("socketlib.ready", () => {
@@ -53,8 +54,18 @@ async function wildcards(token_id) {
 	}
 }
 
+function forEachSwarm(fn) {
+	for (const layer of [canvas.tokens, canvas.tiles]) {
+		layer?.placeables.forEach((o) => {
+			if (o.swarm) fn(o.swarm);
+		});
+	}
+}
+
+const refreshAllHP = () => forEachSwarm((swarm) => swarm.refreshHP());
+
 function getHealthEstimate(token) {
-	let reduceHP = game.settings.get(MOD_NAME, SETTING_HP_REDUCE);
+	let reduceHP = SettingsCache.get(SETTING_HP_REDUCE);
 	if (!reduceHP) return 1; // always return 100% health
 
 	let currentProperty;
@@ -77,8 +88,8 @@ function getHealthEstimate(token) {
 			maxProperty = "actor.system.wounds.max";
 			break;
 		default:
-			currentProperty = game.settings.get(MOD_NAME, SETTING_HP_REDUCE_ATTRIBUTE_VALUE);
-			maxProperty = game.settings.get(MOD_NAME, SETTING_HP_REDUCE_ATTRIBUTE_MAX);
+			currentProperty = SettingsCache.get(SETTING_HP_REDUCE_ATTRIBUTE_VALUE);
+			maxProperty = SettingsCache.get(SETTING_HP_REDUCE_ATTRIBUTE_MAX);
 			break;
 	}
 	if (!currentProperty || !maxProperty) {
@@ -424,15 +435,15 @@ export class Swarm {
 	}
 
 	static get _fadeTime() {
-		return game.settings.get(MOD_NAME, SETTING_FADE_TIME);
+		return SettingsCache.get(SETTING_FADE_TIME);
 	}
 
 	static get _stopTime() {
-		return game.settings.get(MOD_NAME, SETTING_STOP_TIME);
+		return SettingsCache.get(SETTING_STOP_TIME);
 	}
 
 	static get _animate() {
-		return game.settings.get(MOD_NAME, SETTING_ANIMATE);
+		return SettingsCache.get(SETTING_ANIMATE);
 	}
 
 	/**
@@ -440,6 +451,20 @@ export class Swarm {
 	 */
 	wake() {
 		this.tick.start();
+	}
+
+	/**
+	 * Re-read HP and, if it changed, start growing or shrinking the swarm towards the new size.
+	 * Called from token refreshes and updates rather than every frame, since HP only changes with them.
+	 */
+	refreshHP() {
+		const currentHPPercent = this.calculateHPPercent();
+		if (currentHPPercent === this.currentHPPercent) return;
+		this.currentHPPercent = currentHPPercent;
+		this._hpVisibleCount = this.determineVisibleSprites(currentHPPercent, this.maxSprites);
+		this.number = this._hpVisibleCount;
+		this._hpChanged = true;
+		this.wake();
 	}
 
 	determineStep(ms) {
@@ -534,11 +559,8 @@ export class Swarm {
 		const newTint = this.document.texture.tint;
 		let updateSprites = this.tint !== newTint || this._texturesPending;
 
-		const currentHPPercent = this.calculateHPPercent();
-		if (currentHPPercent !== this.currentHPPercent || !this.created) {
-			this.currentHPPercent = currentHPPercent;
-			this._hpVisibleCount = this.determineVisibleSprites(currentHPPercent, this.maxSprites);
-			this.number = this.determineVisibleSprites(currentHPPercent, this.maxSprites);
+		if (this._hpChanged || !this.created) {
+			this._hpChanged = false;
 			this.step = this.determineStep(ms);
 			updateSprites = true;
 		}
@@ -625,10 +647,13 @@ export class Swarm {
 		}
 
 		if (animate) {
-			// Calling the animation specific method, setDestinations
-			this.setDestinations(ms);
-			// Calling the generic move method
-			this.move(ms);
+			// Nobody can see sprites moving on a mesh Foundry has hidden (e.g. out of vision), so skip them
+			if (this.layer.visible) {
+				// Calling the animation specific method, setDestinations
+				this.setDestinations(ms);
+				// Calling the generic move method
+				this.move(ms);
+			}
 			// Re-place every sprite if animation gets switched off
 			this._placed.length = 0;
 		} else {
@@ -1444,11 +1469,15 @@ Hooks.on(
 		if (token.document.getFlag(MOD_NAME, SWARM_FLAG)) {
 			if (!token.swarm) {
 				createSwarm(token);
-			} else if (changes.refreshMesh) {
-				token.swarm.update();
 			} else {
-				// e.g. HP or size changes, which a stopped, non-animated swarm needs to pick up
-				token.swarm.wake();
+				if (changes.refreshMesh) {
+					token.swarm.update();
+				} else {
+					// e.g. size changes, which a stopped, non-animated swarm needs to pick up
+					token.swarm.wake();
+				}
+				// Actor and token HP updates both end in a token refresh
+				token.swarm.refreshHP();
 			}
 		} else if (token.swarm && token.originalMesh) {
 			token.swarm.restoreOriginal();
@@ -1546,7 +1575,8 @@ Hooks.once("init", () => {
 		scope: "world",
 		config: true,
 		type: Boolean,
-		default: false
+		default: false,
+		onChange: SettingsCache.onChange(SETTING_HP_REDUCE, refreshAllHP)
 	});
 	game.settings.register(MOD_NAME, SETTING_HP_REDUCE_ATTRIBUTE_VALUE, {
 		name: "Attribute for Current HP",
@@ -1554,7 +1584,8 @@ Hooks.once("init", () => {
 		scope: "world",
 		config: true,
 		type: String,
-		default: "actor.system.attributes.hp.value"
+		default: "actor.system.attributes.hp.value",
+		onChange: SettingsCache.onChange(SETTING_HP_REDUCE_ATTRIBUTE_VALUE, refreshAllHP)
 	});
 	game.settings.register(MOD_NAME, SETTING_HP_REDUCE_ATTRIBUTE_MAX, {
 		name: "Attribute for Max HP",
@@ -1562,7 +1593,8 @@ Hooks.once("init", () => {
 		scope: "world",
 		config: true,
 		type: String,
-		default: "actor.system.attributes.hp.max"
+		default: "actor.system.attributes.hp.max",
+		onChange: SettingsCache.onChange(SETTING_HP_REDUCE_ATTRIBUTE_MAX, refreshAllHP)
 	});
 	game.settings.register(MOD_NAME, SETTING_FADE_TIME, {
 		name: "Fade time",
@@ -1570,7 +1602,8 @@ Hooks.once("init", () => {
 		scope: "world",
 		config: true,
 		type: Number,
-		default: 2.0
+		default: 2.0,
+		onChange: SettingsCache.onChange(SETTING_FADE_TIME)
 	});
 	game.settings.register(MOD_NAME, SETTING_STOP_TIME, {
 		name: "Stop time",
@@ -1578,7 +1611,8 @@ Hooks.once("init", () => {
 		scope: "world",
 		config: true,
 		type: Number,
-		default: 5.0
+		default: 5.0,
+		onChange: SettingsCache.onChange(SETTING_STOP_TIME)
 	});
 	const pcg = foundry?.canvas?.groups?.PrimaryCanvasGroup
 		? "foundry.canvas.groups.PrimaryCanvasGroup"
@@ -1638,8 +1672,6 @@ Hooks.once("setup", () => {
 		config: true,
 		type: Boolean,
 		default: game.settings.get("core", "performanceMode") !== CONST.CANVAS_PERFORMANCE_MODES.LOW,
-		onChange: () => {
-			for (const layer of [canvas.tokens, canvas.tiles]) layer?.placeables.forEach((o) => o.swarm?.wake());
-		}
+		onChange: SettingsCache.onChange(SETTING_ANIMATE, () => forEachSwarm((swarm) => swarm.wake()))
 	});
 });
