@@ -30,6 +30,10 @@ On the _Appearance_ tab additional options will affect the swarm:
 
 And you should have your swarm ready for action.
 
+## Settings
+
+-   **Animate swarms** (per device): turn this off to save performance on slower machines. Instead of moving, each critter is drawn once in a spot that fits the swarm's animation style, and a swarm hides or shows all at once instead of fading out one critter at a time. It's off by default when Foundry's **Performance Mode** is set to Low, and on otherwise.
+
 ## Localization
 
 Current support for:

@@ -24,6 +24,7 @@ import {
 	DEFAULT_SWARM_SPEED,
 	GAMMA,
 	MOD_NAME,
+	SETTING_ANIMATE,
 	SETTING_FADE_TIME,
 	SETTING_HP_REDUCE,
 	SETTING_HP_REDUCE_ATTRIBUTE_MAX,
@@ -203,6 +204,8 @@ export class Swarm {
 		this.cosOffsets = [];
 		this.sinOffsets = [];
 		this.waiting = [];
+		// Sprites already placed at their resting position when animation is disabled
+		this._placed = [];
 		this.isTile = object instanceof foundry.canvas.placeables.Tile;
 
 		// Cache settings and lookups that don't change per frame
@@ -340,6 +343,7 @@ export class Swarm {
 		const docScaleX = Math.abs(this.object?.document?.texture?.scaleX ?? 1);
 		const docScaleY = Math.abs(this.object?.document?.texture?.scaleY ?? docScaleX);
 		this._scaleCompensation = 1 / Math.max(0.01, (docScaleX + docScaleY) / 2);
+		this._placed.length = 0;
 	}
 
 	/**
@@ -427,6 +431,17 @@ export class Swarm {
 		return game.settings.get(MOD_NAME, SETTING_STOP_TIME);
 	}
 
+	static get _animate() {
+		return game.settings.get(MOD_NAME, SETTING_ANIMATE);
+	}
+
+	/**
+	 * Restart the ticker if it was stopped because a non-animated swarm had nothing left to do.
+	 */
+	wake() {
+		this.tick.start();
+	}
+
 	determineStep(ms) {
 		const count = Math.abs(this.visible - this.number);
 		// step, corresponding to the module setting "fade time", also, prevent division by zero
@@ -487,6 +502,7 @@ export class Swarm {
 			if (remaining > 0) this.createSprites(remaining);
 		}
 
+		const animate = Swarm._animate;
 		t = Math.min(t, 2.0); // Cap frame skip to two frames
 		// Milliseconds elapsed, as calculated using the "time" fraction and an optimistic 60fps
 		const ms = t * 1000 * (1.0 / 60);
@@ -497,7 +513,7 @@ export class Swarm {
 		const worldDeltaX = curX - this.lastWorldPos.x;
 		const worldDeltaY = curY - this.lastWorldPos.y;
 
-		if (!this._isTeleport && (worldDeltaX !== 0 || worldDeltaY !== 0)) {
+		if (animate && !this._isTeleport && (worldDeltaX !== 0 || worldDeltaY !== 0)) {
 			// Skip compensation for large jumps (delta > 2x token size)
 			const maxDelta = (this.isTile ? this.object.bounds.width : this.object.w) * 2;
 			if (worldDeltaX * worldDeltaX + worldDeltaY * worldDeltaY < maxDelta * maxDelta) {
@@ -515,7 +531,7 @@ export class Swarm {
 		this.lastWorldPos.y = curY;
 
 		const newTint = this.document.texture.tint;
-		let updateSprites = this.tint !== newTint;
+		let updateSprites = this.tint !== newTint || this._texturesPending;
 
 		const currentHPPercent = this.calculateHPPercent();
 		if (currentHPPercent !== this.currentHPPercent || !this.created) {
@@ -607,16 +623,81 @@ export class Swarm {
 			}
 		}
 
-		// Calling the animation specific method, setDestinations
-		this.setDestinations(ms);
-		// Calling the generic move method
-		this.move(ms);
+		if (animate) {
+			// Calling the animation specific method, setDestinations
+			this.setDestinations(ms);
+			// Calling the generic move method
+			this.move(ms);
+			// Re-place every sprite if animation gets switched off
+			this._placed.length = 0;
+		} else {
+			this.#placeStatic();
+			if (this.#isSettled()) this.tick.stop();
+		}
 		this.created = true;
 		// Keep rotation
 		// if (!this.randomRotation){
 		//     this.rotation(this.object.document.rotation);
 		// }
 		this.showDebug(ms);
+	}
+
+	/**
+	 * Used when animation is disabled: snap any visible sprite that hasn't been placed yet straight to
+	 * the destination its animation type would send it to, facing the way it would be travelling.
+	 */
+	#placeStatic() {
+		if (this._animType === ANIM_TYPE_FORMATION_SQUARE) {
+			// The formation grid depends on the visible count and facing, so lay it out again when those change
+			const rotation = this.document.rotation;
+			if (this._visibleStart !== this._placedVisibleStart || rotation !== this._placedRotation) {
+				this._placedVisibleStart = this._visibleStart;
+				this._placedRotation = rotation;
+				this._placed.length = 0;
+			}
+		}
+
+		let pending = false;
+		for (let i = this._visibleStart; i < this.sprites.length; ++i) {
+			if (this._placed[i]) continue;
+			pending = true;
+			// Destination-picking animations only choose a new destination once a sprite has arrived
+			this.dest[i].x = this.sprites[i].x;
+			this.dest[i].y = this.sprites[i].y;
+		}
+		if (!pending) return;
+
+		const halfPi = -Math.PI / 2;
+		this.setDestinations(0);
+		for (let i = this._visibleStart; i < this.sprites.length; ++i) {
+			if (this._placed[i]) continue;
+			const sprite = this.sprites[i];
+			const dx = this.dest[i].x - sprite.x;
+			const dy = this.dest[i].y - sprite.y;
+			if (dx * dx + dy * dy > THETA) sprite.rotation = halfPi + Math.atan2(dy, dx);
+			sprite.x = this.dest[i].x;
+			sprite.y = this.dest[i].y;
+		}
+		// Look a little ahead so sprites on a continuous path face along it
+		this.setDestinations(100);
+		for (let i = this._visibleStart; i < this.sprites.length; ++i) {
+			if (this._placed[i]) continue;
+			const sprite = this.sprites[i];
+			const dx = this.dest[i].x - sprite.x;
+			const dy = this.dest[i].y - sprite.y;
+			if (dx * dx + dy * dy > THETA) sprite.rotation = halfPi + Math.atan2(dy, dx);
+			this._placed[i] = true;
+		}
+	}
+
+	/**
+	 * Whether a non-animated swarm has nothing left to update, so its ticker can stop until woken.
+	 */
+	#isSettled() {
+		if (this.sprites.length < this.maxSprites || this._visTransition || this.visible !== this.number) return false;
+		// Keep refreshing sprite scales until every texture has loaded
+		this._texturesPending = this.sprites.some((sprite) => !sprite.texture.valid);
+		return !this._texturesPending;
 	}
 
 	showDebug(ms) {
@@ -689,6 +770,7 @@ export class Swarm {
 	 * @param {boolean} hidden
 	 */
 	hide(hidden) {
+		this.wake();
 		this.faded = hidden;
 		const newTarget = hidden ? (this._isGM ? 0.5 : 0) : 1;
 		this._targetVisAlpha = newTarget;
@@ -712,11 +794,12 @@ export class Swarm {
 			startAlphas.reverse();
 		}
 
-		if (Swarm._fadeTime === 0) {
+		if (Swarm._fadeTime === 0 || !Swarm._animate) {
 			for (let i = 0; i < indices.length; i++) {
 				this._spriteAlphas[indices[i]] = newTarget;
 			}
 			this._visTransition = null;
+			this.layer._transitioning = false;
 			return;
 		}
 
@@ -725,7 +808,7 @@ export class Swarm {
 			startAlphas,
 			perSpriteTime: (Swarm._fadeTime * 1000) / indices.length,
 			elapsed: 0,
-			targetAlpha: newTarget,
+			targetAlpha: newTarget
 		};
 		this.layer._transitioning = true;
 	}
@@ -794,6 +877,7 @@ export class Swarm {
 		}
 
 		if (animChanged || sizeChanged || speedChanged) {
+			this._placed.length = 0;
 			this._swarmSpeed = newSpeed;
 			for (let i = 0; i < this.speeds.length; i++) {
 				this.speeds[i] = this._computeSpeed(newAnim, newSpeed);
@@ -815,6 +899,7 @@ export class Swarm {
 			this._visTransition = null;
 			this.layer._transitioning = false;
 		}
+		this.wake();
 	}
 
 	destroy() {
@@ -1360,6 +1445,9 @@ Hooks.on(
 				createSwarm(token);
 			} else if (changes.refreshMesh) {
 				token.swarm.update();
+			} else {
+				// e.g. HP or size changes, which a stopped, non-animated swarm needs to pick up
+				token.swarm.wake();
 			}
 		} else if (token.swarm && token.originalMesh) {
 			token.swarm.restoreOriginal();
@@ -1433,6 +1521,8 @@ Hooks.on(
 				createSwarm(tile);
 			} else if (changes.refreshMesh) {
 				tile.swarm.update();
+			} else {
+				tile.swarm.wake();
 			}
 		} else if (tile.swarm && tile.originalMesh) {
 			tile.swarm.restoreOriginal();
@@ -1536,4 +1626,19 @@ Hooks.once("init", () => {
 	);
 
 	CONFIG.debug.canvas.primary.swarms = false;
+});
+
+// Registered on setup so the default can follow core's performance mode, which is registered after init
+Hooks.once("setup", () => {
+	game.settings.register(MOD_NAME, SETTING_ANIMATE, {
+		name: "Animate swarms",
+		hint: "Animate swarm sprites. When disabled, sprites are drawn once where their animation would place them, to save performance. Defaults to off when the performance mode is Low.",
+		scope: "client",
+		config: true,
+		type: Boolean,
+		default: game.settings.get("core", "performanceMode") !== CONST.CANVAS_PERFORMANCE_MODES.LOW,
+		onChange: () => {
+			for (const layer of [canvas.tokens, canvas.tiles]) layer?.placeables.forEach((o) => o.swarm?.wake());
+		}
+	});
 });

@@ -67,3 +67,7 @@ Swarm configuration is stored as Foundry document flags on tokens/tiles, namespa
 ### World Settings
 
 GM-configurable via Foundry's settings API: `reduceSwarmWithHP`, `attributeHpValue`, `attributeHpMax`, `fadeTime`, `stopTime`.
+
+### Client Settings
+
+`animateSwarms` — registered on `setup` so its default can be off when core's performance mode is Low. When off, `Swarm#placeStatic` snaps each sprite to where its animation type would send it, and the swarm's ticker stops once settled; `Swarm#wake` restarts it on hide, flag updates and token/tile refreshes (e.g. HP changes).
